@@ -487,6 +487,14 @@ class Console(QWidget):
                 # VAD 状态（检测到语音/静音翻译中）只用于内部分句与计时，不显示
                 if payload not in (SPEECH_STARTED_MARK, SPEECH_STOPPED_MARK):
                     self.lbl_state.setText(payload)
+                    # 连接生命周期消息（断开/重连中/已重连）同步刷字幕窗底部
+                    # 状态行——lbl_state 被隐藏，重连等待期（最长约110s）用户
+                    # 需在字幕条上看到进度，否则"死了还是在恢复"无从判断
+                    s = str(payload)
+                    if any(k in s for k in ("断开", "重连")):
+                        self.overlay.set_status(s)
+                        if "已自动重连" in s or "就绪" in s:
+                            self.lbl_err.setText("")  # 成功后清残留错误
                 if payload == SPEECH_STARTED_MARK:
                     self.overlay.begin_utterance()
                 elif payload == SPEECH_STOPPED_MARK:

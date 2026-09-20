@@ -103,3 +103,31 @@ class TestRealtimeClient:
         time = __import__("time"); time.sleep(0.1)
         assert threading.active_count() <= before + 1
         assert c._closed.is_set()
+
+
+class TestReconnectVisibility:
+    def test_reconnect_status_shown_on_overlay(self, qapp):
+        """重连进度必须刷到字幕窗状态行（lbl_state 隐藏，overlay 是唯一可见通道）。"""
+        import console as C
+        win = C.Console()
+        win.show()
+        win.timer.stop()
+        win.lbl_err.setText("旧错误")
+        for msg in (
+            "连接断开 (code=1006 x)，5s 后自动重连（第 1/3 次）…",
+            "已自动重连（第 1 次尝试成功）",
+        ):
+            win._enqueue("status", msg)
+            win._drain()
+        assert "自动重连" in win.overlay.lbl_status.text()
+        assert win.lbl_err.text() == ""  # 成功后清残留
+
+    def test_ordinary_status_not_on_overlay(self, qapp):
+        import console as C
+        win = C.Console()
+        win.show()
+        win.timer.stop()
+        win._enqueue("status", "会话已创建 abc123")
+        win._drain()
+        assert "会话已创建" not in win.overlay.lbl_status.text()
+        win.overlay.close(); win.close()
