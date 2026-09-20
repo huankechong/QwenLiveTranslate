@@ -12,7 +12,11 @@
 
 > 适合场景：看外语视频/会议实时出双语字幕、外语课堂同传辅助、给 OBS/直播叠加字幕条。仅 Windows（依赖 WASAPI 系统声音采集）。
 
-![控制台截图](assets/screenshot.png)
+**深色 / 浅色主题：**
+
+| ![深色主题](assets/screenshot-dark.png) | ![浅色主题](assets/screenshot-light.png) |
+|:---:|:---:|
+| 深色（默认） | 浅色 |
 
 ## 功能一览
 
