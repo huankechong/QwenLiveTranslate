@@ -109,7 +109,7 @@ pyinstaller --noconfirm --clean --onefile --windowed --name QwenLiveTranslate --
 |---|---|
 | 提示未设置 key | 确认已 `setx DASHSCOPE_API_KEY "sk-xxx"`（用户级，setx 后需**新开**终端/双击才生效；脚本方式也可当前会话 `$env:` 临时设） |
 | 连接/会话超时 | 检查网络；确认 key 有效（百炼控制台可查）；限流 RPM 10，别高频重启 |
-| 无字幕 | 状态栏看"检测到语音"是否出现；系统声音模式需电脑正在播放声音 |
+| 无字幕 | 先看控制台 API Key 指示点是否为绿色、连接是否"就绪"；对着麦克风说话测试（麦克风模式），或确认电脑正在出声（系统声音模式）；仍无输出则点"停止"→"开始同传"重连一次 |
 | 采集失败 | 运行 `python capture.py --list-devices` 检查设备（蓝牙耳机需处于连接状态才会出现在 loopback 列表） |
 
 ## 6. 文件结构

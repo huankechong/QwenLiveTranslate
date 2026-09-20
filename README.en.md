@@ -105,7 +105,7 @@ After launch:
 |---|---|
 | "Key not set" | `setx DASHSCOPE_API_KEY "sk-xxx"` (open a **new** terminal afterwards); or paste into the console's Key field |
 | Connect/session timeout | Check network & key validity; RPM 10 — avoid rapid restarts |
-| No captions | Check console for "speech detected"; system-audio mode requires audio actually playing |
+| No captions | Check the console's key dot is green and the session shows "ready"; speak into the mic (mic mode) or make sure audio is actually playing (system-audio mode); if still nothing, Stop → Start to reconnect |
 | Capture failure | Run `python capture.py --list-devices` (Bluetooth headsets must be connected to appear in loopback list) |
 
 ## 6. Project Layout
