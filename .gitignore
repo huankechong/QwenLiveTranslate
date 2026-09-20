@@ -1,0 +1,28 @@
+# 构建产物（含 dist/settings.json 里的本地 API key —— 绝不入库）
+build/
+dist/
+
+# 运行时生成（用户本地配置与历史库；首次运行自动创建）
+settings.json
+translation_history.db
+translation_history.db-shm
+translation_history.db-wal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 本机开发守则（含个人环境路径，仅本地使用）
+CLAUDE.md
+
+# 临时/备份
+*.bak
+_*/
+*_log_local.txt
+
+# 图标生成脚本的临时产物（app.ico 是交付物，保留）
+icon_preview*.png
+icon_master*.png

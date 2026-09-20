@@ -1,0 +1,14 @@
+STS 已连接，等待会话创建…
+STS 会话已创建 sess_TYEXrLSCiWkj3FtLhKD5U
+STS 就绪 · file → DE · 开始说话
+CONNECT ok=True 0.5s
+STS 🎤 检测到语音
+STS … 静音，翻译中
+PUSH done 7.2s
+STS 会话已结束
+STS 连接断开 (code=1000 None)
+=== SUMMARY ===
+ok=True
+asr=[(None, '今天天气真好，我们 一起去公园散步 吧 然后再去喝一杯咖啡，聊聊天 ')]
+de=['Das Wetter ist heute wirklich schön. Wir gehen zusammen im Park spazieren. Lass uns gehen. Danach trinken wir eine Tasse Kaffee und plaudern ein bisschen. ']
+seen=asr,trans

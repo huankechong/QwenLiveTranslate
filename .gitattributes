@@ -1,0 +1,6 @@
+# 统一换行：仓库内 LF，检出时 Windows 自动转 CRLF（bat 除外，必须 CRLF）
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.ico binary
+*.wav binary
