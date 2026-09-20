@@ -15,6 +15,15 @@ __pycache__/
 .venv/
 venv/
 
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 操作系统杂物
+Thumbs.db
+.DS_Store
+
 # 本机开发守则（含个人环境路径，仅本地使用）
 CLAUDE.md
 
