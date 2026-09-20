@@ -8,7 +8,7 @@
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0EA5E9.svg)]()
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)]()
 [![API: Qwen3.8 Realtime](https://img.shields.io/badge/API-Qwen3.8%20Realtime-6E56CF.svg)]()
-[![CI](https://github.com/OWNER/QwenLiveTranslate/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![CI](https://github.com/huankechong/QwenLiveTranslate/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
 A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Realtime** model (DashScope WebSocket API). It renders as a **graphical console + always-on-top translucent overlay** showing source text and translation side by side — supporting both microphone and system-audio capture, continuous paragraph-style captions, dark/light themes, and live appearance tuning.
 

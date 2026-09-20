@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0EA5E9.svg)]()
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)]()
 [![API: Qwen3.8 Realtime](https://img.shields.io/badge/API-Qwen3.8%20Realtime-6E56CF.svg)]()
-[![CI](https://github.com/OWNER/QwenLiveTranslate/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![CI](https://github.com/huankechong/QwenLiveTranslate/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
 基于阿里云百炼 **Qwen3.8-LiveTranslate-Flash-Realtime** 同传模型（DashScope WebSocket API）的实时双语字幕工具，形态类似 Live Captions Translator：**图形控制台 + 透明置顶悬浮双语字幕**，支持麦克风与系统声音双来源、整段连续字幕、深/浅双主题、外观实时调节。
 
