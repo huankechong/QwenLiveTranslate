@@ -185,7 +185,7 @@ class Console(QWidget):
             pass
 
     def init_ui(self):
-        self.setWindowTitle("Qwen LiveTranslate · 同传字幕")
+        self.setWindowTitle(f"Qwen LiveTranslate v{config.__version__} · 同传字幕")
         self.setFixedWidth(436)
 
         root = QVBoxLayout(self)

@@ -1,9 +1,12 @@
 # Qwen LiveTranslate 悬浮字幕客户端
 
+[English](./README.en.md) | **简体中文**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-14B8A6.svg)](./LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0EA5E9.svg)]()
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)]()
 [![API: Qwen3.8 Realtime](https://img.shields.io/badge/API-Qwen3.8%20Realtime-6E56CF.svg)]()
+[![CI](https://github.com/OWNER/QwenLiveTranslate/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
 基于阿里云百炼 **Qwen3.8-LiveTranslate-Flash-Realtime** 同传模型（DashScope WebSocket API）的实时双语字幕工具，形态类似 Live Captions Translator：**图形控制台 + 透明置顶悬浮双语字幕**，支持麦克风与系统声音双来源、整段连续字幕、深/浅双主题、外观实时调节。
 
@@ -166,6 +169,13 @@ qwen-livetranslate/
 - API key 仅存本机（环境变量或 settings.json），不经过任何第三方服务器，直连阿里云 DashScope
 - 翻译历史存本地 SQLite（`translation_history.db`），不上传
 - 音频仅实时推流至 DashScope 做识别翻译，不落盘
+
+## 开发与测试
+
+```powershell
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/ -q   # offscreen 无头运行，无需音频设备与 API key
+```
 
 ## 参与贡献
 
