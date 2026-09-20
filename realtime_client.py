@@ -142,14 +142,16 @@ class LiveTranslateClient:
         self.session_ready.clear()
         self.connected.clear()
         if not self._closed.is_set():
-            self.on_status(f"连接断开 (code={code} {msg})")
-            # 意外断线（非主动 close）：通知 controller 触发自动重连。
-            # on_status 只更新（被隐藏的）状态行——用户不可感知（P0 根因）
+            # 意外断线（非主动 close）：交由 controller 的重连引擎统一
+            # 发可见提示（含退避进度）；此处若也发"连接断开"会同帧双发，
+            # 字幕窗状态行闪烁且第一条信息不全（第六轮审计 A）
             if self.on_disconnect is not None:
                 try:
                     self.on_disconnect(code, msg)
                 except Exception:  # noqa: BLE001
                     pass
+            else:
+                self.on_status(f"连接断开 (code={code} {msg})")
 
     # ---------- 事件路由 ----------
     def _on_message(self, _ws, message: str):

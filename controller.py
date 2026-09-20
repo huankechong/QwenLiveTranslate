@@ -170,8 +170,11 @@ class SessionController:
         重启。改为原子换持：锁内完成状态切换，锁外顺序清理+起新会话。
         """
         with self._lock:
-            if self.state in (ST_IDLE, ST_STOPPING):
-                # 无活动会话：直接起（对齐 start 的幂等语义）
+            if self.state in (ST_IDLE, ST_STOPPING, ST_ERROR):
+                # 无活动会话：直接起（对齐 start 的幂等语义）。
+                # 锁内判定+锁外起线程仍有原子窗口（两次快速 restart 会起
+                # 两个 start 线程），但 start() 自身的锁内 CONNECTING 幂等
+                # 检查会拦截第二个——不丢正确性（第六轮审计 B 注记）
                 threading.Thread(target=self.start, daemon=True).start()
                 return
             self._start_token += 1  # 作废进行中的连接尝试
