@@ -26,15 +26,21 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 
 | Capability | Details |
 |---|---|
-| **Self-healing connection** | Auto-reconnects on unexpected disconnect (backoff 5s/15s/45s, 3 attempts); captions preserved during reconnect; falls back to a visible error after exhaustion. Multi-screen aware |
+| **Dual themes** | One-click sun/moon toggle in the title bar (preference remembered): teal→sky accent gradient (#14B8A6→#0EA5E9) with a cool neutral palette; overlay stays dark for readability over video |
+| Console | Source (mic / system audio), source language (auto / de / en / zh / ja / fr / es / ru) & target language, one-click start/stop with live status |
+| Key management | Paste & save key in-console (password field with show/hide, stored locally in settings.json; falls back to `DASHSCOPE_API_KEY` env var) |
+| Caption cleanup | **🗑 Clear captions** button / `Ctrl+Alt+Backspace` clears current + history lines |
+| **Self-healing connection** | Auto-reconnects on unexpected disconnect (backoff 5s/15s/45s, 3 attempts); captions preserved; multi-screen aware |
 | Real-time interpretation | Speech → source transcript (ASR) → translation, streamed bilingually |
 | Floating captions | Translucent rounded always-on-top window; draggable; click-through toggle via `Ctrl+Alt+Space` |
-| **Edge resize** | Drag left/right edges to resize width, bottom/corner for height (WYSIWYG, persisted on release; double-click restores auto height) |
-| Caption trimming | `display_sentences` slider (1–10): sentences merged into paragraphs (CJK seamless, smart spacing for Latin), oldest trimmed beyond the limit |
-| Dual themes | Dark/light via title-bar sun/moon toggle; teal→sky accent gradient, cool-neutral palette; overlay stays dark for readability over video |
-| Console | Source (mic / system audio), source language (auto / de / en / zh / ja / fr / es / ru) & target language; one-click start/stop with live status |
-| Key management | Paste & save key in-console (stored locally in settings.json; falls back to `DASHSCOPE_API_KEY` env var) |
-| History | SQLite storage per final sentence (time/languages/original/translation/latency); double-click row to copy; one-click CSV export (UTF-8-BOM) |
+| **Edge resize** | Drag left/right edges for width, bottom/corner for height (persisted on release; double-click restores auto height) |
+| Appearance tuning | Font scale 0.7~2.0× / opacity / line-count sliders live-adjusting (values shown instantly); show-original & latency toggles |
+| Caption trimming | `display_sentences` slider (1–10): sentences merged into paragraphs (CJK seamless, smart Latin spacing), oldest trimmed beyond the limit |
+| History | SQLite per final sentence; double-click row to copy; one-click CSV export (UTF-8-BOM) |
+| Window memory | Caption position & size restored across launches |
+| Latency badge | Optional per-sentence latency display (`Ctrl` toggle in console) |
+| Dual sources | Microphone & system audio (WASAPI loopback) with 16 kHz resampling |
+| Settings persistence | settings.json next to the exe (whitelisted keys; auto-reconnect on changes) |
 | Hotkeys | See table below |
 
 ## 1. Get an API Key (paid model, rate-limited)
@@ -131,7 +137,9 @@ qwen-livetranslate/
 ├── sample_16k.wav       # E2E test samples
 ├── e2e_*.txt            # E2E verification logs
 ├── requirements.txt     # Runtime deps
+├── requirements-dev.txt # Dev/test deps (pytest, pyinstaller)
 ├── LICENSE / CONTRIBUTING.md / CODE_OF_CONDUCT.md / CHANGELOG.md
+└── .gitignore / .gitattributes
 └── .github/             # CI workflow + issue templates
 ```
 

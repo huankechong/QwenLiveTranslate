@@ -56,7 +56,7 @@
 pip install -r requirements.txt
 ```
 
-依赖：`websocket-client`（协议）、`PySide6`（悬浮窗）、`PyAudioWPatch`（采集，含 WASAPI loopback）、`keyboard`（全局热键）。（开发/测试期另装过 edge-tts、soundfile、PyInstaller，均非运行时依赖）
+依赖：`websocket-client`（协议）、`PySide6`（悬浮窗）、`PyAudioWPatch`（采集，含 WASAPI loopback）、`keyboard`（全局热键）。开发/测试额外依赖见 `requirements-dev.txt`（pytest、pyinstaller）。
 
 ## 3. 运行
 
@@ -135,11 +135,14 @@ qwen-livetranslate/
 ├── sample_en_16k.wav    # 端到端测试样本（英语）
 ├── e2e_*.txt            # 端到端验证日志（协议联调实录）
 ├── requirements.txt     # 运行时依赖
+├── requirements-dev.txt # 开发/测试依赖（pytest、pyinstaller）
+├── README.en.md         # 英文版 README
+├── CHANGELOG.md         # 更新日志（Keep a Changelog 格式）
 ├── LICENSE / CONTRIBUTING.md / CODE_OF_CONDUCT.md
-└── .gitignore           # 拦截 build/dist/本地配置/历史库等
+└── .gitignore / .gitattributes
 ```
 
-重新打包（**用 `--windowed`**，无黑色控制台窗，2026-09-20 类名枚举法实测双 Qt 窗口+零控制台正常。注：2026-09-19 曾判 windowed 静默失败，后证实系当时按标题匹配枚举 Qt Tool 窗漏检所致，平反）：见上文「从源码打包 exe」完整命令（必须带 `--add-data "theme.py;."`，否则 exe 缺主题引擎启动即崩）
+重新打包：见上文「从源码打包 exe」完整命令。或直接 `pyinstaller --noconfirm QwenLiveTranslate.spec`（spec 已含全部 `--add-data` 与图标配置；**必须带 `theme.py`**，否则 exe 缺主题引擎启动即崩）
 
 ## 7. 踩坑实录（2026-09-19 真机联调验证）
 
