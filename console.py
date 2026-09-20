@@ -563,6 +563,12 @@ class Console(QWidget):
             ST_STOPPING: ("停止中…", True),
             ST_ERROR: ("开始同传", False),
         }
+        if s == ST_CONNECTING:
+            # 新会话建立（含重连）：旧会话的待配对原文与新译文会错配
+            # 入库（重连窗口 5-65s < 30s 新鲜度窗口，过滤拦不住）——
+            # 连接开始即清空配对队列与延迟计时（第五轮审计 Bug2）
+            self._pending_srcs.clear()
+            self._speech_t0 = None
         if s in m:
             text, disabled = m[s]
             self.btn_start.setText(text)
@@ -721,6 +727,13 @@ class Console(QWidget):
     # ================= 退出 =================
     def closeEvent(self, e):
         self.ctrl.stop()
+        # 先停事件泵再最后 drain 一次：关闭时队列里可能有迟到的译文终稿，
+        # 不 drain 直接 shutdown 会静默丢最后一句入库（第五轮审计 Bug1）
+        self.timer.stop()
+        try:
+            self._drain()
+        except Exception:  # noqa: BLE001
+            pass
         self.overlay.close()
         # 历史窗若开着：同步关闭（否则 app 因它存活变僵尸，且 store 已关会崩）
         try:

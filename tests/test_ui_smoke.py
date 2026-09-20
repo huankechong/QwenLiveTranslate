@@ -131,3 +131,28 @@ class TestReconnectVisibility:
         win._drain()
         assert "会话已创建" not in win.overlay.lbl_status.text()
         win.overlay.close(); win.close()
+
+
+class TestSessionBoundary:
+    def test_close_drains_pending_queue(self, qapp):
+        """退出时未 drain 的译文终稿不因 shutdown 丢（第五轮 Bug1）。"""
+        from PySide6.QtGui import QCloseEvent
+        import console as C
+        win = C.Console()
+        win.show()
+        win.timer.stop()
+        win._enqueue("translation", ("tail sentence", True))
+        win.closeEvent(QCloseEvent())  # 不崩即过（异常会冒泡）
+
+    def test_connecting_clears_pairing_queue(self, qapp):
+        """新会话（含重连）开始时清空旧配对队列与延迟计时（第五轮 Bug2）。"""
+        import time
+        import console as C
+        from controller import ST_CONNECTING
+        win = C.Console()
+        win._pending_srcs.append({"speaker": None, "text": "ghost", "ts": time.time()})
+        win._speech_t0 = 1.23
+        win._on_state(ST_CONNECTING)
+        assert win._pending_srcs == []
+        assert win._speech_t0 is None
+        win.overlay.close(); win.close()

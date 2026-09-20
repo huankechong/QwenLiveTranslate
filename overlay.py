@@ -265,8 +265,10 @@ class CaptionOverlay(QWidget):
             removed = cut_to - cut_from
             starts = starts[1:]
             # 剩余句起点统一前移 removed（它们都在 cut_to 之后）；
-            # 等值边界（前句起点==被删句终点）也必须前移，否则起点重复
-            starts = [s - removed for s in starts]
+            # 等值边界（前句起点==被删句终点）也必须前移，否则起点重复；
+            # max(0,·) 下界钳制：removed 与 Qt 实删数若有偏差（HTML 实体
+            # 折算等）防止负起点导致后续裁剪窗口错位（第五轮审计 Bug3）
+            starts = [max(0, s - removed) for s in starts]
             # 当前流式段起点同步修正：只有被删的是历史句（start 恒指向
             # 最后一句=保留窗口内，正常不会命中此分支），仅防御异常顺序
             state = self._src_state if browser is self.src_browser else self._trn_state
