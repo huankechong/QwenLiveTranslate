@@ -33,7 +33,8 @@ class LiveTranslateClient:
     """把服务器事件流翻译成简单回调：on_source / on_translation / on_status / on_error。"""
 
     def __init__(self, target_lang: str, on_source, on_translation, on_status, on_error,
-                 voice: str = "Tina", source_lang: str = "auto", api_key: str | None = None):
+                 voice: str = "Tina", source_lang: str = "auto", api_key: str | None = None,
+                 on_disconnect=None):
         self.target_lang = target_lang
         self.source_lang = source_lang  # "auto"=自动识别，或语种代码
         self.api_key_override = api_key  # None=用环境变量
@@ -42,6 +43,8 @@ class LiveTranslateClient:
         self.on_translation = on_translation  # (text, final: bool)
         self.on_status = on_status          # (msg: str)
         self.on_error = on_error            # (msg: str)
+        # 意外断线通知（主动 close 不触发）：controller 据此走自动重连
+        self.on_disconnect = on_disconnect  # (code, msg) | None
 
         self.ws: websocket.WebSocketApp | None = None
         self.session_id: str | None = None
@@ -140,6 +143,13 @@ class LiveTranslateClient:
         self.connected.clear()
         if not self._closed.is_set():
             self.on_status(f"连接断开 (code={code} {msg})")
+            # 意外断线（非主动 close）：通知 controller 触发自动重连。
+            # on_status 只更新（被隐藏的）状态行——用户不可感知（P0 根因）
+            if self.on_disconnect is not None:
+                try:
+                    self.on_disconnect(code, msg)
+                except Exception:  # noqa: BLE001
+                    pass
 
     # ---------- 事件路由 ----------
     def _on_message(self, _ws, message: str):

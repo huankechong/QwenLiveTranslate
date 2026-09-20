@@ -147,7 +147,7 @@ class CaptionOverlay(QWidget):
         )
         self.lay.addWidget(self.lbl_status)
 
-        screen = QGuiApplication.primaryScreen().availableGeometry()
+        screen = self._current_screen_geo()
         w = min(int(self.cfg.get("width", 820)), screen.width() - 80)
         self.resize(w, 200)
         self._restore_or_default_pos(screen)
@@ -180,7 +180,7 @@ class CaptionOverlay(QWidget):
     # ---------- 外观/尺寸 ----------
     def apply_cfg(self, cfg: dict):
         self.cfg = cfg
-        screen = QGuiApplication.primaryScreen().availableGeometry()
+        screen = self._current_screen_geo()
         width = min(int(cfg.get("width", 820)), screen.width() - 80)
         scale = float(cfg.get("font_scale", 1.0))
         opacity = float(cfg.get("bg_opacity", 0.9))
@@ -428,6 +428,15 @@ class CaptionOverlay(QWidget):
             pass
         return super().nativeEvent(event_type, message)
 
+
+    # ---------- 多屏支持 ----------
+    def _current_screen_geo(self):
+        """字幕窗所在屏的可用区（多屏正确）；取不到回退主屏。"""
+        scr = QGuiApplication.screenAt(self.frameGeometry().center())
+        if scr is None:
+            scr = QGuiApplication.primaryScreen()
+        return scr.availableGeometry()
+
     def _edge_at(self, pos):
         """返回命中边缘：'left'/'right'/'bottom'/'bottom_left'/'bottom_right'，中央 None。"""
         w, h = self.width(), self.height()
@@ -499,7 +508,7 @@ class CaptionOverlay(QWidget):
 
     def mouseMoveEvent(self, e):
         if self._press_pos is not None and e.buttons() & Qt.LeftButton:
-            screen = QGuiApplication.primaryScreen().availableGeometry()
+            screen = self._current_screen_geo()
             g = self.frameGeometry()
             target = e.globalPosition().toPoint() - self._press_pos
             x = max(0, min(target.x(), screen.right() + 1 - g.width()))
