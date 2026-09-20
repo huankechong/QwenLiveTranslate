@@ -155,7 +155,35 @@ class SessionController:
         self._set_state(ST_IDLE)
 
     def restart(self):
-        """设置变更后重建会话（限流 RPM 10，UI 侧会做频率保护）。"""
-        self.stop()
-        time.sleep(0.6)
+        """设置变更后重建会话（限流 RPM 10，UI 侧会做频率保护）。
+
+        复查修复：旧 stop→sleep→start 与 start 的 CONNECTING 幂等检查
+        存在时序窗口——旧会话的 stop 把状态置 IDLE 后、新 start 抢先
+        进入 CONNECTING，旧 start 的后台线程醒来发现 token 不符直接
+        退出（行为对但绕）；更糟的是 UI 在这 0.6s 里点"开始"会吃掉
+        重启。改为原子换持：锁内完成状态切换，锁外顺序清理+起新会话。
+        """
+        with self._lock:
+            if self.state in (ST_IDLE, ST_STOPPING):
+                # 无活动会话：直接起（对齐 start 的幂等语义）
+                threading.Thread(target=self.start, daemon=True).start()
+                return
+            self._start_token += 1  # 作废进行中的连接尝试
+            self._set_state(ST_STOPPING)
+            flag, client, capture = (self._stop_flag, self._client, self._capture)
+            self._stop_flag = self._client = self._capture = None
+
+        if flag is not None:
+            flag.set()
+        if client is not None:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+        if capture is not None:
+            try:
+                capture.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        self._set_state(ST_IDLE)
         threading.Thread(target=self.start, daemon=True).start()

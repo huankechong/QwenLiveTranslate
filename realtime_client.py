@@ -111,10 +111,12 @@ class LiveTranslateClient:
         # 若 _closed 未置位会向用户误报"连接断开"（审计 F）
         self._closed.set()
         try:
-            if self.ws is not None:
+            if self.ws is not None and self.connected.is_set():
                 self._send({"event_id": self._eid(), "type": "session.finish"})
                 # finish→ws.close 挪到后台线程：原实现 sleep(0.3) 阻塞
-                # UI 线程 300ms（每次停止/切设置都卡一下，审计 C）
+                # UI 线程 300ms（每次停止/切设置都卡一下，审计 C）。
+                # connected 守卫：ws 已断/超时 abort 过时不再起多余收尾线程
+                # （复查修复：原实现 _send 静默 no-op 后 _fin 线程照起）
                 def _fin():
                     time.sleep(0.3)  # 给服务器留出发送 session.finished 的时间
                     try:
@@ -145,6 +147,10 @@ class LiveTranslateClient:
             data = json.loads(message)
         except json.JSONDecodeError:
             self.on_error(f"非 JSON 消息: {message[:120]}")
+            return
+        # 已 close/abort 的会话：迟到消息一律丢弃（复查修复：close 后
+        # 服务器残余事件仍会触发回调，污染新会话的 UI/字幕/历史库）
+        if self._closed.is_set():
             return
         t = data.get("type", "")
 
