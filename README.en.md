@@ -14,6 +14,8 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 
 > Typical uses: real-time bilingual subtitles for foreign-language videos/meetings, classroom interpretation aid, or as an OBS/streaming caption bar. Windows only (system-audio capture relies on WASAPI loopback).
 
+![Console screenshot](assets/screenshot.png)
+
 
 
 ## Features
