@@ -506,6 +506,11 @@ class Console(QWidget):
                 speaker, text, final = payload
                 self.overlay.set_source(speaker, text)
                 if final and text:
+                    # 原文句终：复位段落状态，让下一个 item 的 delta 从
+                    # 新段追加而非替换本句（diff 改造前旧实现靠"整段重写"
+                    # 碰巧保留了旧句；diff 后必须显式分句，否则新句顶掉旧句
+                    # ——只保留一句的回归即此因）
+                    self.overlay.finalize_src_utterance()
                     self._pending_srcs.append(
                         {"speaker": speaker, "text": text, "ts": time.time()})
             elif kind == "translation":

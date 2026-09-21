@@ -243,3 +243,28 @@ class TestOverlayLayoutNoOverlap:
         f.setPixelSize(15)
         assert o.src_browser.height() >= O._line_h(15), "至少一行高"
         o.close()
+
+
+class TestSrcSentenceAccumulation:
+    def test_source_sentences_accumulate(self, qapp):
+        """原文多句必须累积保留（diff 改造回归：新句曾顶掉旧句只剩一行）。
+        句终需 finalize_src_utterance 分段，下一句从新段追加。"""
+        import overlay as O
+        cfg = {"font_scale": 1.0, "max_lines": 12, "show_original": True,
+               "height": 256, "width": 677, "bg_opacity": 0.76,
+               "display_sentences": 10}
+        o = O.CaptionOverlay(cfg)
+        o.apply_cfg(cfg)
+        o.show()
+        qapp.processEvents()
+        for deltas in (["第一句 One", "第一句 One 完成"],
+                       ["第二句 Two"], ["第三句 Three"]):
+            for d in deltas:
+                o.set_source(None, d)
+            o.finalize_src_utterance()
+        txt = o.src_browser.toPlainText()
+        for k in ("第一句", "第二句", "第三句"):
+            assert k in txt, f"{k} 被顶掉: {txt!r}"
+        starts = o.src_browser.property("sent_starts")
+        assert len(starts) == 3
+        o.close()

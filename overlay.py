@@ -371,6 +371,10 @@ class CaptionOverlay(QWidget):
         self._src_state = {"start": None, "speaker": None, "html": ""}
         self._trn_state = {"start": None, "html": ""}
 
+    def finalize_src_utterance(self):
+        """原文句终：只复位原文段状态（译文块独立节奏，互不影响）。"""
+        self._src_state = {"start": None, "speaker": None, "html": ""}
+
     def set_status(self, msg: str):
         # 基底与穿透标签分离：穿透中任何状态更新都不丢「👻穿透中(热键切回)」
         # 提示（原实现直接 setText 会把标签吞掉，用户失去退出指引）
