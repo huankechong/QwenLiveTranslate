@@ -198,25 +198,12 @@ class CaptionOverlay(QWidget):
             f"}}"
         )
 
-        fs_orig = max(9, int(13 * scale))
+        fs_orig = max(10, int(15 * scale))   # 原文基准 13→15px（用户反馈偏小）
         fs_trans = max(11, int(17 * scale))
         src_lines = max(2, round(max_lines * 0.4))
         trans_lines = max(2, max_lines - src_lines)
         src_h = src_lines * _line_h(fs_orig) + 4
         trans_h = trans_lines * _line_h(fs_trans) + 4
-
-        self.src_browser.setFixedHeight(src_h)
-        self.src_browser.setVisible(show_orig)
-        self.src_browser.setStyleSheet(
-            f"background:transparent; border:none; padding:0; margin:0;"
-            f" font-family:'{FONT_FAMILY}'; font-size:{fs_orig}px;"
-        )
-        self.trn_browser.setFixedHeight(trans_h)
-        self.trn_browser.setStyleSheet(
-            f"background:transparent; border:none; padding:0; margin:0;"
-            f" font-family:'{FONT_FAMILY}'; font-size:{fs_trans}px;"
-        )
-        self._apply_latency_badge()
 
         status_h = 16
         btn_h = 24
@@ -225,6 +212,41 @@ class CaptionOverlay(QWidget):
         # 用户拖出的高度优先（None=自适应）；至少能装下按钮行+状态行
         min_total = pads + btn_h + status_h + 40
         total = max(min_total, int(cfg["height"])) if cfg.get("height") else auto_total
+
+        # ---------- 文本块高度分配（修复拖小时重叠） ----------
+        # 可用空间 = 总高 - 非文本部分。旧代码只处理"拖大给译文"，
+        # 拖小时 src/trn 固定高度之和超出可用空间 → 布局压缩重叠。
+        # 现按需求分配：富余全给译文；不足时按各自保底（≥1 行）削减。
+        avail = total - (pads + btn_h + status_h)
+        if show_orig:
+            h_min_src = _line_h(fs_orig) + 4   # 各保底一行
+            h_min_trn = _line_h(fs_trans) + 4
+            want_src = max(h_min_src, src_h)
+            want_trn = max(h_min_trn, trans_h)
+            if want_src + want_trn <= avail:
+                src_alloc = want_src            # 富余（拖大）：增量全给译文
+                trn_alloc = avail - want_src
+            else:                               # 不足（拖小）：按需削减防重叠
+                over = want_src + want_trn - avail
+                src_cut = min(over, want_src - h_min_src)
+                trn_cut = min(over - src_cut, want_trn - h_min_trn)
+                src_alloc = want_src - src_cut
+                trn_alloc = want_trn - trn_cut
+            self.src_browser.setFixedHeight(src_alloc)
+            self.trn_browser.setFixedHeight(trn_alloc)
+        else:
+            self.trn_browser.setFixedHeight(max(_line_h(fs_trans) + 4, avail))
+        self.src_browser.setVisible(show_orig)
+        self.src_browser.setStyleSheet(
+            f"background:transparent; border:none; padding:0; margin:0;"
+            f" font-family:'{FONT_FAMILY}'; font-size:{fs_orig}px;"
+        )
+        self.trn_browser.setStyleSheet(
+            f"background:transparent; border:none; padding:0; margin:0;"
+            f" font-family:'{FONT_FAMILY}'; font-size:{fs_trans}px;"
+        )
+        self._apply_latency_badge()
+
         # 不用 setFixed*：钉死尺寸会让 OS 原生边缘缩放（WM_NCHITTEST 路径）被
         # 布局约束弹回。改为 min 限制下限 + max 留足缩放空间。
         self.setMinimumWidth(min(MIN_W, width))
@@ -232,9 +254,6 @@ class CaptionOverlay(QWidget):
         self.setMaximumWidth(min(MAX_W_EXTRA, screen.width()))
         self.setMaximumHeight(MAX_H)
         self.resize(width, total)
-        # 高度超出时把增量给译文块
-        if total > auto_total:
-            self.trn_browser.setFixedHeight(trans_h + (total - auto_total))
         # 钳制到屏幕内；记忆位置由 g.x()/g.y() 保持（只钳制，不重排锚点）
         g = self.geometry()
         self.move(

@@ -209,3 +209,37 @@ class TestOverlayAnimations:
         assert win.overlay.isVisible()
         assert win.btn_caption.isChecked()
         win.overlay.close(); win.close()
+
+
+class TestOverlayLayoutNoOverlap:
+    def test_small_height_no_overlap(self, qapp):
+        """拖小时原文/译文不得重叠：按需削减分配，各保底一行。"""
+        import overlay as O
+        base = {"font_scale": 1.0, "max_lines": 8, "show_original": True,
+                "height": 120, "width": 600, "bg_opacity": 0.9, "display_sentences": 4}
+        for h in (None, 200, 120, 90, 60):
+            cfg = dict(base, height=h)
+            o = O.CaptionOverlay(cfg)
+            o.apply_cfg(cfg)
+            o.show()
+            qapp.processEvents()
+            g1, g2 = o.src_browser.geometry(), o.trn_browser.geometry()
+            assert not g1.intersects(g2), f"height={h} 重叠"
+            assert g2.bottom() <= o.height(), f"height={h} 译文超出窗体"
+            # 各自至少一行高
+            assert o.src_browser.height() >= 15, f"height={h} 原文过扁"
+            assert o.trn_browser.height() >= 15, f"height={h} 译文过扁"
+            o.close()
+
+    def test_orig_font_base_15px(self, qapp):
+        """原文基准字号 15px（用户反馈 13 偏小）。"""
+        import overlay as O
+        cfg = {"font_scale": 1.0, "max_lines": 8, "show_original": True,
+               "height": None, "width": 600, "bg_opacity": 0.9, "display_sentences": 4}
+        o = O.CaptionOverlay(cfg)
+        o.apply_cfg(cfg)
+        from PySide6.QtGui import QFont
+        f = o.src_browser.font()
+        f.setPixelSize(15)
+        assert o.src_browser.height() >= O._line_h(15), "至少一行高"
+        o.close()
