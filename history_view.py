@@ -61,7 +61,7 @@ class HistoryWindow(QWidget):
         top.addStretch(1)
         btn_refresh = QPushButton("刷新")
         btn_refresh.clicked.connect(self.refresh)
-        btn_csv = QPushButton("导出 CSV")
+        btn_csv = QPushButton("导出 Excel / CSV")
         btn_csv.setObjectName("accent")
         btn_csv.clicked.connect(self.export_csv)
         btn_clear = QPushButton("清空")
@@ -137,13 +137,17 @@ class HistoryWindow(QWidget):
 
     def export_csv(self):
         default = history.db_dir() / time.strftime(
-            "translation_history_%Y%m%d_%H%M.csv", time.localtime())
+            "translation_history_%Y%m%d_%H%M.xlsx", time.localtime())
         path, _ = QFileDialog.getSaveFileName(
-            self, "导出 CSV", str(default), "CSV 文件 (*.csv)")
+            self, "导出 Excel", str(default),
+            "Excel 文件 (*.xlsx);;CSV 文件 (*.csv)")
         if not path:
             return
         try:
-            n = self.store.export_csv(path)
+            if path.lower().endswith(".csv"):
+                n = self.store.export_csv(path)
+            else:
+                n = self.store.export_xlsx(path)
             QMessageBox.information(self, "导出成功", f"已导出 {n} 条到\n{path}")
         except Exception as e:  # noqa: BLE001
             QMessageBox.critical(self, "导出失败", str(e))

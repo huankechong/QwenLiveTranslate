@@ -155,6 +155,61 @@ class HistoryStore:
                 n += 1
         return n
 
+    def _export_rows(self, limit: int | None) -> list[dict]:
+        """导出用数据（时间正序 旧→新），CSV/xlsx 共用。"""
+        if limit:
+            rows = self.recent(limit=limit)
+            rows.reverse()
+            return rows
+        with self._lock:
+            rows_raw = self._conn.execute(
+                "SELECT id,ts,source_lang,target_lang,speaker,original,translation,latency_ms"
+                " FROM history ORDER BY id ASC"
+            ).fetchall()
+        keys = ("id", "ts", "source_lang", "target_lang", "speaker",
+                "original", "translation", "latency_ms")
+        return [dict(zip(keys, r)) for r in rows_raw]
+
+    def export_xlsx(self, out_path: str | Path, limit: int | None = None) -> int:
+        """导出为 Excel（.xlsx）：时间列是真日期单元格（yyyy-mm-dd hh:mm:ss），
+        列宽/表头样式预设，Excel 打开即正确显示（CSV 会被 Excel 按区域
+        设置自作主张转换/吞列宽，xlsx 才是显示可控的正式交付格式）。"""
+        from datetime import datetime
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        rows = self._export_rows(limit)
+        out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "翻译历史"
+        headers = ["时间", "源语种", "目标语种", "原文", "译文", "延迟ms"]
+        ws.append(headers)
+        head_font = Font(bold=True, color="FFFFFF")
+        head_fill = PatternFill("solid", fgColor="1F2937")
+        for c in ws[1]:
+            c.font = head_font
+            c.fill = head_fill
+            c.alignment = Alignment(horizontal="center")
+        date_style = "yyyy-mm-dd hh:mm:ss"
+        for r in rows:
+            ts = r["ts"]
+            ws.append([
+                datetime.fromtimestamp(ts) if ts is not None else None,
+                r["source_lang"] or "",
+                r["target_lang"] or "",
+                r["original"] or "",
+                r["translation"] or "",
+                "" if r["latency_ms"] is None else r["latency_ms"],
+            ])
+            ws.cell(row=ws.max_row, column=1).number_format = date_style
+        for i, w_ in enumerate((19, 8, 8, 45, 45, 9), start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w_
+        wb.save(out)
+        return len(rows)
+
 
 # 模块级单例（console 启动时创建）
 _STORE: HistoryStore | None = None

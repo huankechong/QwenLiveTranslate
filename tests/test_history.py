@@ -55,3 +55,27 @@ class TestHistoryStore:
         store = history.get_store()
         assert store.add("a", "b", None, "x", "y") == -1
         assert store.recent() == []
+
+
+class TestXlsxExport:
+    def test_export_xlsx_real_datetime_cells(self, tmp_path):
+        """xlsx 时间列必须是真日期单元格（Excel 显示可控），CSV 会被
+        Excel 按区域设置自作主张转换（用户实测问题）。"""
+        from openpyxl import load_workbook
+        s = history.HistoryStore(tmp_path / "h.db")
+        s.add("zh", "de", None, "测试", "Test", 100)
+        s.add("en", "zh", None, "b", "乙", None)
+        out = tmp_path / "out.xlsx"
+        n = s.export_xlsx(out)
+        assert n == 2
+        ws = load_workbook(out).active
+        rows = list(ws.iter_rows())
+        assert rows[0][0].value == "时间"
+        from datetime import datetime
+        for row in rows[1:]:
+            c = row[0]
+            assert isinstance(c.value, datetime), "时间列必须是 datetime"
+            assert c.number_format == "yyyy-mm-dd hh:mm:ss"
+        # 空延迟：写入空串，openpyxl 读回 None（Excel 显示为空，正常）
+        assert rows[2][5].value in ("", None)
+        s.close()
