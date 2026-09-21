@@ -19,6 +19,7 @@ import ctypes.wintypes
 import theme
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtCore import QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QFontMetrics, QGuiApplication
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
@@ -75,12 +76,13 @@ class CaptionOverlay(QWidget):
     def __init__(self, cfg: dict):
         super().__init__()
         self.cfg = cfg
+        self._fade: QPropertyAnimation | None = None  # 显示/隐藏过渡动画
         self._click_through = False
         self._press_pos = None
         self._geo_save_timer = None
         # 流式状态：每块当前句的起始光标位（None=下一段从新起）
-        self._src_state = {"start": None, "speaker": None}
-        self._trn_state = {"start": None}
+        self._src_state = {"start": None, "speaker": None, "html": ""}
+        self._trn_state = {"start": None, "html": ""}
         # 延迟角标（show_latency 开时显示）
         self._latency_ms: int | None = None
         # 状态行基底文本（穿透标签由 _refresh_status 单独叠加）
@@ -284,10 +286,11 @@ class CaptionOverlay(QWidget):
     # ---------- 流式写入 ----------
     def _stream(self, browser: QTextBrowser, state: dict, html: str, new_para: bool,
                 plain_head: str = ""):
-        """增量写入：句子连成整段（智能分隔），流式 delta 就地替换当前句尾部。
+        """增量写入：句子连成整段（智能分隔），流式 delta 就地追加。
 
-        plain_head：本句的纯文本开头（用于判断句间分隔），流式 delta 时为空。
-        """
+        防 flicker 关键：delta 到达时只 append 新增尾部（前缀 diff），
+        绝不整段 KeepAnchor 重写——整段重排是高频 delta 下闪烁/
+        跳动的根源。state["html"] 缓存本句已写入的 HTML。"""
         doc = browser.document()
         cur = QTextCursor(doc)
         if state["start"] is None:
@@ -305,19 +308,30 @@ class CaptionOverlay(QWidget):
             starts = starts if isinstance(starts, list) else []
             starts.append(state["start"])
             browser.setProperty("sent_starts", starts)
-            cur.setPosition(state["start"], QTextCursor.MoveAnchor)
+            state["html"] = ""  # 新句从零累积
         else:
             cur.setPosition(state["start"], QTextCursor.MoveAnchor)
-        cur.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
-        cur.insertHtml(html)
+        # 前缀 diff：只写入新增部分（delta 是本句 HTML 的完整快照）
+        old_html = state.get("html", "")
+        if html.startswith(old_html):
+            delta = html[len(old_html):]
+            state["html"] = html
+            if delta:
+                cur.movePosition(QTextCursor.End)
+                cur.insertHtml(delta)
+        else:
+            # 快照不兼容（服务器改写了前缀）：退回整句替换保正确性
+            cur.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+            cur.insertHtml(html)
+            state["html"] = html
         sb = browser.verticalScrollBar()
         sb.setValue(sb.maximum())
 
     def begin_utterance(self):
         """新句开始：两块的下一次写入各起新段。"""
         if self._src_state["start"] is not None or self._trn_state["start"] is not None:
-            self._src_state = {"start": None, "speaker": None}
-            self._trn_state = {"start": None}
+            self._src_state = {"start": None, "speaker": None, "html": ""}
+            self._trn_state = {"start": None, "html": ""}
 
     def set_source(self, speaker, text):
         # 注：qwen3.8 实际不下发说话人字段（speaker 恒 None），
@@ -335,8 +349,8 @@ class CaptionOverlay(QWidget):
 
     def finalize_utterance(self):
         # 段内容已就地写入，只需复位段起点（下句起新段）
-        self._src_state = {"start": None, "speaker": None}
-        self._trn_state = {"start": None}
+        self._src_state = {"start": None, "speaker": None, "html": ""}
+        self._trn_state = {"start": None, "html": ""}
 
     def set_status(self, msg: str):
         # 基底与穿透标签分离：穿透中任何状态更新都不丢「👻穿透中(热键切回)」
@@ -353,8 +367,8 @@ class CaptionOverlay(QWidget):
         self.trn_browser.clear()
         self.src_browser.setProperty("sent_starts", [])
         self.trn_browser.setProperty("sent_starts", [])
-        self._src_state = {"start": None, "speaker": None}
-        self._trn_state = {"start": None}
+        self._src_state = {"start": None, "speaker": None, "html": ""}
+        self._trn_state = {"start": None, "html": ""}
 
     # ---------- 延迟角标 ----------
     def set_latency(self, ms: int | None):
@@ -559,7 +573,28 @@ class CaptionOverlay(QWidget):
         self.hide()
 
     def show_caption(self):
+        """淡入显示（150ms ease-out）。隐藏动画进行中的反向请求由
+        _fade 的 stop 兜底——同属性动画直接 stop 后重设方向即接管。"""
+        self._fade_to(1.0)
         self.show()
+        self.raise_()
+
+    def fade_out_and_hide(self):
+        """淡出隐藏（120ms），完成后才真正 hide()。淡出期间再次 show
+        会被 _fade_to 取消动画并恢复——快速来回切换无状态错乱。"""
+        self._fade_to(0.0, hide_when_done=True)
+
+    def _fade_to(self, target: float, hide_when_done: bool = False):
+        if self._fade is not None:
+            self._fade.stop()
+        self._fade = QPropertyAnimation(self, b"windowOpacity", self)
+        self._fade.setDuration(150 if target > 0 else 120)
+        self._fade.setStartValue(self.windowOpacity())
+        self._fade.setEndValue(target)
+        self._fade.setEasingCurve(QEasingCurve.OutCubic)
+        if hide_when_done:
+            self._fade.finished.connect(self.hide)
+        self._fade.start(QPropertyAnimation.DeleteWhenStopped)
 
     @property
     def caption_hidden(self) -> bool:

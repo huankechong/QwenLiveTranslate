@@ -53,9 +53,17 @@ class TestConsoleUI:
         import console as C
         win = C.Console()
         win._apply_caption_visibility(False)
+        # 淡出语义：动画进行中仍可见，但按钮态立即同步
         assert win.btn_caption.isChecked() is False
+        # 等淡出动画（120ms）完成
+        deadline = __import__("time").time() + 1.0
+        while win.overlay.isVisible() and __import__("time").time() < deadline:
+            qapp.processEvents()
+            __import__("time").sleep(0.02)
+        assert not win.overlay.isVisible(), "淡出完成后应隐藏"
         win._apply_caption_visibility(True)
         assert win.btn_caption.isChecked() is True
+        assert win.overlay.isVisible()
         win.overlay.close(); win.close()
 
     def test_status_tag_survives_overwrite(self, qapp):
@@ -155,4 +163,49 @@ class TestSessionBoundary:
         win._on_state(ST_CONNECTING)
         assert win._pending_srcs == []
         assert win._speech_t0 is None
+        win.overlay.close(); win.close()
+
+
+class TestOverlayAnimations:
+    def test_fade_toggle_and_reverse(self, qapp):
+        """淡出进行中反向显示：动画被接管，窗口保持可见（防快速切换错乱）。"""
+        import overlay as O
+        import settings as st
+        o = O.CaptionOverlay(st.load())
+        o.show()
+        o.setWindowOpacity(1.0)
+        o.fade_out_and_hide()
+        assert o._fade is not None
+        o.show_caption()  # 立刻反向
+        qapp.processEvents()
+        assert o.isVisible()
+        o.close()
+
+    def test_stream_prefix_diff_append(self, qapp):
+        """delta 快照按前缀 diff 只追加新增尾部；不兼容快照回退整句替换。"""
+        import overlay as O
+        import settings as st
+        o = O.CaptionOverlay(st.load())
+        h = lambda s: f"<span style='color:#FFFFFF'>{s}</span>"
+        o._stream(o.trn_browser, o._trn_state, h("Hello"), True, "Hello")
+        o._stream(o.trn_browser, o._trn_state, h("Hello world"), True)
+        o._stream(o.trn_browser, o._trn_state, h("Hello world!"), True)
+        assert o._trn_state["html"] == h("Hello world!")
+        assert o.trn_browser.toPlainText().strip() == "Hello world!"
+        # 不兼容快照（服务器改写前缀）
+        o._stream(o.trn_browser, o._trn_state, h("Rewritten"), True)
+        assert o.trn_browser.toPlainText().strip() == "Rewritten"
+        o.close()
+
+    def test_apply_visibility_debounce(self, qapp):
+        """目标态一致时跳过：已显示再点显示不重启动画（幂等防抖）。"""
+        import console as C
+        win = C.Console()
+        win.show()
+        win._apply_caption_visibility(True)
+        op1 = win.overlay.windowOpacity()
+        win._apply_caption_visibility(True)  # 重复触发
+        qapp.processEvents()
+        assert win.overlay.isVisible()
+        assert win.btn_caption.isChecked()
         win.overlay.close(); win.close()

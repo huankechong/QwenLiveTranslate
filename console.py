@@ -659,11 +659,18 @@ class Console(QWidget):
         self._apply_caption_visibility(self.btn_caption.isChecked())
 
     def _apply_caption_visibility(self, show: bool):
+        """目标态与当前动画目标一致时跳过——快速连按/热键+按钮双路径
+        并发时防抖（淡出进行中再点显示会取消动画恢复，反之亦然；
+        一致则零开销）。"""
         if show:
+            if self.overlay.isVisible() and self.overlay.windowOpacity() > 0.5:
+                return  # 已显示（或淡入中），不重启动画
             self.overlay.show_caption()
             self.lbl_state.setText("字幕已显示")
         else:
-            self.overlay.hide()
+            if not self.overlay.isVisible():
+                return  # 已隐藏
+            self.overlay.fade_out_and_hide()
             self.lbl_state.setText("字幕已隐藏（Ctrl+Alt+B 或「显示字幕」按钮再显示）")
         # 双路径同步按钮态（blockSignals 防回环）
         self.btn_caption.blockSignals(True)
