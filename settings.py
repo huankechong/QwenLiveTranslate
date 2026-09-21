@@ -68,10 +68,25 @@ def load() -> dict:
 
 
 def save(data: dict):
+    """原子写盘：先写临时文件再 os.replace——直接 open("w") 会在写入
+    瞬间截断原文件，崩溃/断电时 settings.json 变空文件，全部设置丢失
+    （第 7 轮审计 H1）。"""
+    import os
+    import tempfile
     try:
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            json.dump({k: data.get(k) for k in DEFAULTS}, f,
-                      ensure_ascii=False, indent=2)
+        payload = {k: data.get(k) for k in DEFAULTS}
+        fd, tmp = tempfile.mkstemp(
+            dir=str(SETTINGS_PATH.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, SETTINGS_PATH)  # 原子替换，无截断窗口
+        except Exception:  # noqa: BLE001
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except Exception:  # noqa: BLE001
         pass
 

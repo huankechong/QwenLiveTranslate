@@ -208,6 +208,10 @@ class LiveTranslateClient:
             speaker = (data.get("speaker") or (rec or {}).get("speaker"))
             self.on_source(self._speaker_tag(speaker), text, final=True)
         elif t == "conversation.item.input_audio_transcription.failed":
+            # 失败也必须 pop：该 item 的 delta 已入 _asr_items，不清理则
+            # 长会话反复失败会持续泄漏（第 7 轮审计 H2）
+            item_id = data.get("item_id", "?")
+            self._asr_items.pop(item_id, None)
             err = data.get("error", {}).get("message", "识别失败")
             self.on_error(f"ASR 失败: {err}")
 
@@ -220,6 +224,13 @@ class LiveTranslateClient:
             rid = data.get("response_id", "?")
             text = data.get("text") or "".join(self._resp_text.pop(rid, []))
             self.on_translation(text, final=True)
+        elif t in ("response.cancelled", "response.failed",
+                   "response.incomplete", "response.interrupted"):
+            # 中断/失败的 response：只发过 delta 没发 done 的条目必须清理，
+            # 否则字典永久残留（第 7 轮审计 H3）
+            rid = data.get("response_id")
+            if rid is not None:
+                self._resp_text.pop(rid, None)
 
         # ---- VAD 提示 ----
         elif t == "input_audio_buffer.speech_started":

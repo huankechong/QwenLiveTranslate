@@ -713,8 +713,10 @@ class Console(QWidget):
                                 self._hotkey_relay.clear_captions.emit)
             keyboard.add_hotkey(config.HOTKEY_TOGGLE_CAPTION,
                                 self._hotkey_relay.toggle_caption.emit)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            # 不再全静默：无管理员权限等场景热键注册会失败，用户需要
+            # 知道热键不可用（否则以为快捷键坏了到处找），控制台按钮仍可用
+            self.lbl_err.setText(f"全局热键不可用（权限不足？按钮仍可正常用）: {e}"[:200])
 
     def _hotkey_switch_source(self):
         new = "loopback" if self.cfg["source"] == "mic" else "mic"

@@ -79,3 +79,40 @@ class TestXlsxExport:
         # 空延迟：写入空串，openpyxl 读回 None（Excel 显示为空，正常）
         assert rows[2][5].value in ("", None)
         s.close()
+
+
+class TestSettingsAtomicSave:
+    def test_save_is_atomic_no_tmp_left(self, tmp_path, monkeypatch):
+        """save() 原子写：不产生残留 .tmp，内容正确（第 7 轮 H1）。"""
+        import settings as st
+        monkeypatch.setattr(st, "SETTINGS_PATH", tmp_path / "s.json")
+        st.save({"theme": "dark", "lang": "zh"})
+        assert (tmp_path / "s.json").exists()
+        assert not list(tmp_path.glob("*.tmp"))
+        import json
+        d = json.loads((tmp_path / "s.json").read_text(encoding="utf-8"))
+        assert d["theme"] == "dark"
+
+    def test_client_dict_cleanup_on_failure(self, qapp):
+        """ASR failed / response 中断必须清理聚合字典（第 7 轮 H2/H3）。"""
+        import json as J
+        import realtime_client as RC
+        c = RC.LiveTranslateClient.__new__(RC.LiveTranslateClient)
+        c.on_source = lambda *a, **k: None
+        c.on_translation = lambda *a, **k: None
+        c.on_status = lambda m: None
+        c.on_error = lambda m: None
+        c.session_ready = __import__("threading").Event()
+        c.connected = __import__("threading").Event()
+        c._closed = __import__("threading").Event()
+        c._asr_items = {"itemA": {"speaker": None, "parts": ["x"]}}
+        c._resp_text = {"respB": ["partial"]}
+        c.session_id = None
+        c._on_message(None, J.dumps({
+            "type": "conversation.item.input_audio_transcription.failed",
+            "item_id": "itemA",
+            "error": {"message": "boom"}}))
+        assert "itemA" not in c._asr_items
+        c._on_message(None, J.dumps({
+            "type": "response.cancelled", "response_id": "respB"}))
+        assert "respB" not in c._resp_text
