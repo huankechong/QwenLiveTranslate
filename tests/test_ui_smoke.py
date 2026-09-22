@@ -268,3 +268,44 @@ class TestSrcSentenceAccumulation:
         starts = o.src_browser.property("sent_starts")
         assert len(starts) == 3
         o.close()
+
+
+class TestTrimFitsViewport:
+    def test_wrapped_sentences_trimmed_to_viewport(self, qapp):
+        """长句折行超出视口时按显示行裁剪（修复"第二行遮第一行"）；
+        单句超视口保底不裁（防字幕清空）。"""
+        import overlay as O
+        from PySide6.QtGui import QTextCursor
+        cfg = {"font_scale": 1.0, "max_lines": 12, "show_original": True,
+               "height": None, "width": 677, "bg_opacity": 0.76,
+               "display_sentences": 10}
+        o = O.CaptionOverlay(cfg)
+        o.apply_cfg(cfg)
+        o.show()
+        qapp.processEvents()
+        big = lambda t: " ".join(f"{t}{i}" for i in range(30))
+        # 单长句：保底
+        o.set_source(None, big("alpha"))
+        qapp.processEvents()
+        assert len(o.src_browser.property("sent_starts")) == 1
+        assert len(o.src_browser.toPlainText()) > 0, "单句被裁光"
+        # 第二句：旧句裁掉，新句首行在视口顶
+        o.set_source(None, big("beta"))
+        qapp.processEvents()
+        assert len(o.src_browser.property("sent_starts")) == 1
+        cur = o.src_browser.cursorForPosition(
+            o.src_browser.viewport().rect().topLeft())
+        cur.select(QTextCursor.LineUnderCursor)
+        assert cur.selectedText().startswith("beta0"), "新句首行被遮"
+        # 短句零误裁
+        o.close()
+        o2 = O.CaptionOverlay(cfg)
+        o2.apply_cfg(cfg)
+        o2.show()
+        qapp.processEvents()
+        for i in range(1, 4):
+            o2.set_source(None, f"Short {i}")
+            o2.finalize_src_utterance()
+        qapp.processEvents()
+        assert len(o2.src_browser.property("sent_starts")) == 3
+        o2.close()

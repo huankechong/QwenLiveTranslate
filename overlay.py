@@ -264,17 +264,29 @@ class CaptionOverlay(QWidget):
     # ---------- 句子裁剪（整段化：按 sent_starts 起始位记录删整句） ----------
 
     def _trim_lines(self, browser: QTextBrowser, limit: int):
-        """句子连成整段后的裁剪：按记录的句子起始位删最旧的整句。
+        """裁剪：按句数上限删最旧句，且保证剩余内容不超过视口显示行数。
 
-        （旧版按 <br>/U+2028 分隔符扫描——整段化改造后句间只有空格，
-        分隔符法失效，改为 _sent_starts 里记录每句起始光标位。）
+        两层约束（用户实测"第二行遮第一行"修复）：
+        ① 句数 ≤ display_sentences；
+        ② 文档实际高度 ≤ 视口高度 ×1.05（余量）——句子折行时"2 句"
+          可能占 8 显示行而视口只装 4 行，滚到底顶部行必然被滚出，
+          必须继续裁最旧句直到整体装得下。
         """
         if limit <= 0:
             return
         doc = browser.document()
         starts = browser.property("sent_starts")
         starts = starts if isinstance(starts, list) else []
-        while len(starts) > limit:
+        guard = 0
+        while len(starts) > 1 and guard < 100:
+            guard += 1
+            doc_h = doc.size().height()
+            vp_h = browser.viewport().height()
+            fits = doc_h <= vp_h * 1.05 + 2
+            if len(starts) <= limit and fits:
+                break
+            # 保底：只剩最后一句时不再裁（单句超视口属显示问题，
+            # 裁掉=字幕瞬间清空，比滚动更糟；句内滚动可见最新内容）
             # 删最旧一句：从其起点到下一句起点（或文尾）
             cut_from = starts[0]
             cut_to = starts[1] if len(starts) > 1 else doc.characterCount() - 1
@@ -344,7 +356,13 @@ class CaptionOverlay(QWidget):
             cur.insertHtml(html)
             state["html"] = html
         sb = browser.verticalScrollBar()
-        sb.setValue(sb.maximum())
+        # 滚到底必须在【布局完成后】执行：insertHtml 后立即 setValue(max)
+        # 拿到的是旧文档的 max（Qt 排版延迟到事件循环），新句首行会被
+        # 滚出视口"遮住"，直到下一条 delta 才跳出来（用户实测报告）。
+        # singleShot(0) 把滚动排到本轮事件循环的布局之后。
+        def _scroll_bottom():
+            sb.setValue(sb.maximum())
+        QTimer.singleShot(0, _scroll_bottom)
 
     def begin_utterance(self):
         """新句开始：两块的下一次写入各起新段。"""
