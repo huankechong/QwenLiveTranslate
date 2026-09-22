@@ -22,9 +22,17 @@ def qapp():
 
 
 class FakeClient:
-    """可控假客户端：connect 结果、断线触发均可编程。"""
+    """可控假客户端：connect 结果、断线触发均可编程。
+    兼容 providers.LiveEngine 门面属性（Phase 0 起 controller 走引擎协议）。"""
+
+    provider_id = "qwen_livetranslate"
+    display_name = "Fake"
+    audio_spec = None  # 由 fixture 注入（避免循环 import providers）
 
     def __init__(self, *a, **k):
+        from providers.base import AudioSpec, EngineCaps
+        self.audio_spec = AudioSpec(16000)
+        self.caps = EngineCaps(True, True, "websocket")
         self.session_ready = threading.Event()
         self.session_ready.set()
         self.connected = threading.Event()
@@ -35,6 +43,7 @@ class FakeClient:
         self.connect_results = [True]  # 依次弹出；耗尽用最后一个
         self.close_count = 0
         self.connect_count = 0
+        self.pushed = []  # push_audio(pcm) 记录
 
     def connect(self, timeout=15.0):
         self.connect_count += 1
@@ -47,6 +56,9 @@ class FakeClient:
     def _send(self, obj):
         pass
 
+    def push_audio(self, pcm: bytes):
+        self.pushed.append(pcm)
+
     @staticmethod
     def _eid():
         return "e"
@@ -55,8 +67,9 @@ class FakeClient:
 
 
 class FakeCapture:
-    def __init__(self, source="mic"):
+    def __init__(self, source="mic", sample_rate=16000):
         self.stopped = 0
+        self.sample_rate = sample_rate
 
     def start(self):
         pass
@@ -70,21 +83,25 @@ class FakeCapture:
 
 @pytest.fixture
 def fakes(monkeypatch):
-    """打桩 controller 的 client/capture，返回 (clients, captures) 收集器。"""
+    """打桩 controller 的引擎工厂/capture，返回 (clients, captures) 收集器。
+
+    Phase 0 起 controller 经 providers.build_engine 取引擎——patch
+    工厂而非 LiveTranslateClient 类（保证用例走真实工厂包装链）。
+    """
     import controller as CTRL
 
     clients, captures = [], []
 
-    def mk_client(*a, **k):
-        c = FakeClient(*a, **k)
+    def mk_engine(cfg, callbacks):
+        c = FakeClient(*callbacks[:4], on_disconnect=callbacks[4])
         clients.append(c)
         return c
 
-    def mk_capture(source="mic"):
-        c = FakeCapture(source)
+    def mk_capture(source="mic", sample_rate=16000):
+        c = FakeCapture(source, sample_rate)
         captures.append(c)
         return c
 
-    monkeypatch.setattr(CTRL, "LiveTranslateClient", mk_client)
+    monkeypatch.setattr(CTRL, "build_engine", mk_engine)
     monkeypatch.setattr(CTRL, "AudioCapture", mk_capture)
     return clients, captures

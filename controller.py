@@ -12,7 +12,8 @@ import time
 import settings as st
 
 from capture import AudioCapture
-from realtime_client import LiveTranslateClient, push_audio_forever
+from providers import build_engine
+from providers.engine_io import engine_push_loop
 
 # 会话状态
 ST_IDLE = "idle"
@@ -79,8 +80,6 @@ class SessionController:
             cfg = st.load()
             source = cfg["source"]
             lang = cfg["lang"]
-            src_lang = cfg.get("source_lang", "auto")
-            api_key = cfg.get("api_key") or None
             self._start_token += 1
             token = self._start_token
             self._set_state(ST_CONNECTING)
@@ -88,13 +87,10 @@ class SessionController:
 
         # --- 锁外做耗时操作（连接最长 15s，持锁会让"停止"按钮假死）---
         callbacks = self._wire_callbacks()
-        client = LiveTranslateClient(
-            lang, *callbacks[:4],
-            voice="Tina", source_lang=src_lang, api_key=api_key,
-            on_disconnect=callbacks[4],
-        )
+        client = build_engine(cfg, callbacks)
         client.source = source
-        capture = AudioCapture(source=source)
+        capture = AudioCapture(source=source,
+                               sample_rate=client.audio_spec.sample_rate)
         try:
             capture.start()
         except Exception as e:  # noqa: BLE001
@@ -129,7 +125,7 @@ class SessionController:
             self._capture = capture
             self._stop_flag = threading.Event()
             self._push_thread = threading.Thread(
-                target=push_audio_forever,
+                target=engine_push_loop,
                 args=(client, capture, self._stop_flag),
                 daemon=True,
             )

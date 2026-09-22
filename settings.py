@@ -36,6 +36,13 @@ DEFAULTS = {
     "show_latency": False,      # 在字幕窗显示每句延迟（ms）
     "win_x": None,              # 字幕窗上次位置（None=默认右下角）
     "win_y": None,
+    # ---- 多引擎（Phase 0 预留；Phase 1 起生效） ----
+    "engine_mode": "integrated",   # integrated=一体化 | separated=分离式组合
+    "provider": "qwen_livetranslate",  # integrated 模式的引擎 id
+    "asr_provider": "",            # separated 模式：ASR 引擎 id
+    "mt_provider": "",             # separated 模式：翻译引擎 id
+    "provider_configs": {},        # 每引擎多套配置档 {engine_id: [profile,...]}
+    "provider_indices": {},        # 每引擎当前用第几档 {engine_id: int}
 }
 
 # 控制台语言选项（代码 -> 中文名）
@@ -98,3 +105,25 @@ def update(**kwargs) -> dict:
             data[k] = v
     save(data)
     return data
+
+
+def resolve_provider_cfg(pid: str) -> dict:
+    """取引擎 pid 的生效配置档（三级回退，向后兼容）：
+
+    ① provider_configs[pid][provider_indices[pid]]  —— 新多档结构
+    ② 顶层旧 api_key（qwen 专属回退，老用户零感知升级）
+    ③ 空档 → 引擎层自会回退环境变量（DASHSCOPE_API_KEY 等）
+    """
+    data = load()
+    profiles = (data.get("provider_configs") or {}).get(pid) or []
+    if profiles:
+        idx = int((data.get("provider_indices") or {}).get(pid, 0) or 0)
+        idx = max(0, min(idx, len(profiles) - 1))
+        prof = dict(profiles[idx])
+        # qwen 档内未填 key 时回退旧顶层 key（平滑迁移）
+        if pid == "qwen_livetranslate" and not prof.get("api_key"):
+            prof["api_key"] = data.get("api_key") or ""
+        return prof
+    if pid == "qwen_livetranslate":
+        return {"api_key": data.get("api_key") or ""}
+    return {}

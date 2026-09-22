@@ -16,6 +16,12 @@ def _wait(cond, timeout=5.0):
     return False
 
 
+def _patch_engine(monkeypatch, module, cls):
+    """把类包装成 build_engine 工厂（Phase 0 起 controller 经工厂取引擎）。"""
+    monkeypatch.setattr(module, "build_engine",
+                        lambda cfg, cb: cls(*cb[:4], on_disconnect=cb[4]))
+
+
 class TestLifecycle:
     def test_start_stop_normal(self, fakes):
         c = CTRL.SessionController(on_event=lambda k, p: None)
@@ -34,7 +40,7 @@ class TestLifecycle:
                 self.connect_count += 1
                 return True
 
-        monkeypatch.setattr(controller, "LiveTranslateClient", SlowClient)
+        _patch_engine(monkeypatch, controller, SlowClient)
         c = controller.SessionController(on_event=lambda k, p: None)
         t = threading.Thread(target=c.start, daemon=True)
         t.start()
@@ -55,7 +61,7 @@ class TestLifecycle:
                 self.connect_count += 1
                 return False  # 超时
 
-        monkeypatch.setattr(controller, "LiveTranslateClient", NeverReady)
+        _patch_engine(monkeypatch, controller, NeverReady)
         c = controller.SessionController(on_event=lambda k, p: None)
         assert c.start() is False
         assert c.state == CTRL.ST_ERROR
@@ -113,7 +119,7 @@ class TestAutoReconnect:
 
         import controller
         from conftest import FakeCapture
-        monkeypatch.setattr(controller, "LiveTranslateClient", FailAfterFirst)
+        _patch_engine(monkeypatch, controller, FailAfterFirst)
         monkeypatch.setattr(controller, "AudioCapture", FakeCapture)
         c = controller.SessionController(on_event=lambda k, p: events.append((k, p)))
         assert c.start()

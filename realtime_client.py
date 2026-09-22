@@ -260,31 +260,22 @@ class LiveTranslateClient:
 
     source = "mic"  # 由 main.py 赋值，仅用于状态栏显示
 
+    def push_audio(self, pcm: bytes) -> None:
+        """送一帧 PCM（16k/16bit/mono）——qwen 信封内收于此。
+
+        （providers.QwenEngine 与 engine_io.engine_push_loop 的协议边界；
+        协议细节不再泄漏进推流循环。）"""
+        self._send({
+            "event_id": self._eid(),
+            "type": "input_audio_buffer.append",
+            "audio": base64.b64encode(pcm).decode("ascii"),
+        })
+
 
 def push_audio_forever(client: LiveTranslateClient, capture, stop_flag: threading.Event):
-    """推流循环：读采集帧 -> base64 -> input_audio_buffer.append；断线即退。
+    """推流循环（薄别名→providers.engine_io.engine_push_loop）。
 
-    节拍由 read_chunk 的阻塞读天然保证（~100ms/帧 = 实时速率）；
-    **严禁再加额外 sleep**——否则吞吐 < 实时，长会话延迟无限增长
-    （2026-09-20 审计抓到：曾加 0.1s sleep 导致半速推流）。
+    保留原符号以兼容既有引用；实现已泛化为引擎无关版本。
     """
-    while not stop_flag.is_set():
-        if not client.session_ready.is_set():
-            if not client.connected.is_set():
-                break  # 连接已断，退出推流
-            time.sleep(0.05)
-            continue
-        try:
-            pcm = capture.read_chunk()
-        except Exception as e:  # noqa: BLE001
-            # 停止流程中 capture.stop() 关流会让阻塞读抛异常——这是预期
-            # 关闭时序，不是错误；stop_flag 已置时不再向用户报错（审计 D）
-            if not stop_flag.is_set():
-                client.on_error(f"音频读取失败: {e}")
-            break
-        if pcm:
-            client._send({
-                "event_id": client._eid(),
-                "type": "input_audio_buffer.append",
-                "audio": base64.b64encode(pcm).decode("ascii"),
-            })
+    from providers.engine_io import engine_push_loop
+    return engine_push_loop(client, capture, stop_flag)

@@ -63,10 +63,14 @@ class AudioCapture:
     """统一的音频采集器。yield 16kHz/16bit/mono 的 bytes 帧。"""
 
     def __init__(self, source: str = "mic", input_device_index: int | None = None,
-                 loopback_device_index: int | None = None):
+                 loopback_device_index: int | None = None,
+                 sample_rate: int = 16000):
         self.source = source
         self.input_device_index = input_device_index
         self.loopback_device_index = loopback_device_index
+        # 引擎要求的输出采样率（providers AudioSpec；OpenAI Realtime
+        # 需 24k，qwen 16k）。默认 16000 = 原行为不变。
+        self.sample_rate = sample_rate
         self._pa = None
         self._stream = None
 
@@ -75,10 +79,10 @@ class AudioCapture:
         return self._pa.open(
             format=pyaudio.paInt16,
             channels=1,
-            rate=16000,
+            rate=16000 if self.sample_rate == 16000 else self.sample_rate,
             input=True,
             input_device_index=self.input_device_index,  # None=默认麦克风
-            frames_per_buffer=1600,
+            frames_per_buffer=int(self.sample_rate * 0.1),  # 100ms
         )
 
     def _open_loopback(self):
@@ -96,19 +100,19 @@ class AudioCapture:
             frames_per_buffer=int(loop_rate * 0.1),  # 100ms
         ), loop_rate
 
-    def _resample_16k(self, pcm: bytes, src_rate: int) -> bytes:
-        """简单线性重采样到 16kHz mono（整数倍场景直接抽样，否则线性插值）。"""
+    def _resample(self, pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
+        """简单线性重采样（整数倍场景直接抽样，否则线性插值）。"""
         n = len(pcm) // 2
         if n == 0:
             return b""
-        if src_rate == 16000:
+        if src_rate == dst_rate:
             return pcm
         import array
         src = array.array("h")
         src.frombytes(pcm)
         if len(src) == 0:
             return b""
-        step = src_rate / 16000.0
+        step = src_rate / dst_rate
         out_len = int(n / step)
         out = array.array("h")
         pos = 0.0
@@ -123,6 +127,10 @@ class AudioCapture:
             pos += step
         return out.tobytes()
 
+    # 兼容旧名（内部调用方迁移用）
+    def _resample_16k(self, pcm: bytes, src_rate: int) -> bytes:
+        return self._resample(pcm, src_rate, 16000)
+
     # ---------- 对外 ----------
     def start(self):
         self._pa = pyaudio.PyAudio()
@@ -130,14 +138,15 @@ class AudioCapture:
             self._stream, self._loop_rate = self._open_loopback()
         else:
             self._stream = self._open_mic()
-            self._loop_rate = 16000
+            self._loop_rate = self.sample_rate
 
     def read_chunk(self) -> bytes:
-        """读一帧（约100ms）16k/16bit/mono bytes；loopback 自动重采样。"""
-        data = self._stream.read(1600 if self._loop_rate == 16000 else int(self._loop_rate * 0.1),
-                                 exception_on_overflow=False)
-        if self._loop_rate != 16000:
-            data = self._resample_16k(data, self._loop_rate)
+        """读一帧（约100ms）目标采样率 16bit/mono bytes；loopback 自动重采样。"""
+        data = self._stream.read(
+            int(self._loop_rate * 0.1),
+            exception_on_overflow=False)
+        if self._loop_rate != self.sample_rate:
+            data = self._resample(data, self._loop_rate, self.sample_rate)
         return data
 
     def stop(self):
