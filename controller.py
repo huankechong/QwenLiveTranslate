@@ -29,7 +29,7 @@ class SessionController:
         source payload=(speaker,text,final)；translation payload=(text,final)"""
         self.on_event = on_event
         self.state = ST_IDLE
-        self._client = None
+        self._client = None  # providers.LiveEngine | None（门面类型，第8轮审计L2）
         self._capture = None
         self._push_thread = None
         self._stop_flag = None
@@ -87,7 +87,15 @@ class SessionController:
 
         # --- 锁外做耗时操作（连接最长 15s，持锁会让"停止"按钮假死）---
         callbacks = self._wire_callbacks()
-        client = build_engine(cfg, callbacks)
+        try:
+            client = build_engine(cfg, callbacks)
+        except Exception as e:  # noqa: BLE001
+            # 工厂未来会解析/校验 provider 配置（Phase 1+），非法配置必须
+            # 落入 ERROR 态而非崩掉 start 线程（第 8 轮审计 M1）
+            with self._lock:
+                self._set_state(ST_ERROR)
+            self._emit("error", f"引擎构建失败: {e}")
+            return False
         client.source = source
         capture = AudioCapture(source=source,
                                sample_rate=client.audio_spec.sample_rate)

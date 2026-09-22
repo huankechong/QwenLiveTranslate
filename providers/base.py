@@ -40,13 +40,18 @@ class LiveEngine:
     """统一实时引擎门面（基类形态；qwen 一体化与分离管线同构）。
 
     子类必须提供 connected/session_ready 两个 threading.Event，语义与
-    现 LiveTranslateClient 完全一致（推流循环按 session_ready 节拍）。
+    现 LiveTranslateClient 完全一致（推流循环按 session_ready 节拍），
+    并在构造时持有 on_error 回调引用（engine_io 异常上报的唯一通道，
+    不得穿透门面摸内部实现——第 8 轮审计 H1）。
     """
 
     provider_id: str = ""
     display_name: str = ""
     caps: EngineCaps = EngineCaps(True, True, "websocket")
     audio_spec: AudioSpec = AudioSpec()
+
+    # 错误回调（构造注入；推流循环经此上报采集异常）
+    on_error = None
 
     # —— 生命周期 ——
     def connect(self, timeout: float = 15.0) -> bool:  # pragma: no cover

@@ -129,3 +129,46 @@ class TestAutoReconnect:
         assert _wait(lambda: any(
             k == "error" and "自动重连" in str(p) for k, p in events), timeout=8)
         assert c.state == CTRL.ST_ERROR
+
+
+class TestEngineIoErrorPath:
+    def test_capture_error_reports_via_facade_and_exits(self):
+        """capture 抛异常：经门面 on_error 上报（不穿透 _client）并退出循环。
+        （第 8 轮审计 H1——engine_io 此前零测试覆盖的错误路径）"""
+        import threading, time
+        from providers.engine_io import engine_push_loop
+
+        reported = []
+        class NoClientEngine:
+            # 模拟 SeparatedPipeline：没有 _client 属性，只有门面 on_error
+            provider_id = "sep"; display_name = "Sep"
+            def __init__(self):
+                self.session_ready = threading.Event(); self.session_ready.set()
+                self.connected = threading.Event(); self.connected.set()
+                self.on_error = reported.append
+        class BoomCap:
+            def read_chunk(self):
+                raise OSError("device gone")
+        eng = NoClientEngine()
+        flag = threading.Event()
+        t = threading.Thread(target=engine_push_loop, args=(eng, BoomCap(), flag), daemon=True)
+        t.start(); t.join(timeout=3)
+        assert not t.is_alive(), "循环必须退出"
+        assert reported and "device gone" in reported[0]
+        assert any("音频读取失败" in m for m in reported)
+
+    def test_build_engine_failure_lands_error_state(self, monkeypatch):
+        """工厂抛异常 → ERROR 态 + error 事件（不崩 start 线程，M1）。"""
+        import controller as CTRL
+        from controller import SessionController, ST_ERROR
+        events = []
+        def boom(cfg, cb):
+            raise ValueError("bad provider config")
+        monkeypatch.setattr(CTRL, "build_engine", boom)
+        monkeypatch.setattr(CTRL, "AudioCapture",
+                            lambda source="mic", sample_rate=16000: None)
+        c = SessionController(on_event=lambda k, p: events.append((k, p)))
+        ok = c.start()
+        assert ok is False
+        assert c.state == ST_ERROR
+        assert any(k == "error" and "引擎构建失败" in str(p) for k, p in events)

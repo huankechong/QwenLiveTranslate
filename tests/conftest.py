@@ -40,6 +40,7 @@ class FakeClient:
         self._closed = threading.Event()
         self.ws = None
         self.on_disconnect = k.get("on_disconnect")
+        self.on_error = k.get("on_error") or (lambda m: None)  # 门面错误通道（H1）
         self.connect_results = [True]  # 依次弹出；耗尽用最后一个
         self.close_count = 0
         self.connect_count = 0

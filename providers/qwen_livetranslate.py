@@ -21,6 +21,7 @@ class QwenEngine(LiveEngine):
     def __init__(self, target_lang, on_source, on_translation, on_status,
                  on_error, voice="Tina", source_lang="auto",
                  api_key=None, on_disconnect=None):
+        self.on_error = on_error  # 门面层错误回调（engine_io 上报通道）
         self._client = LiveTranslateClient(
             target_lang, on_source, on_translation, on_status, on_error,
             voice=voice, source_lang=source_lang, api_key=api_key,

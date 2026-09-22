@@ -29,7 +29,14 @@ def engine_push_loop(engine, capture, stop_flag: threading.Event):
             # 停止流程中 capture.stop() 关流会让阻塞读抛异常——这是预期
             # 关闭时序，不是错误；stop_flag 已置时不再向用户报错（审计 D）
             if not stop_flag.is_set():
-                engine._client.on_error(f"音频读取失败: {e}")
+                # 经门面 on_error 上报（第 8 轮审计 H1：不得穿透
+                # engine._client——SeparatedPipeline 无该属性会 AttributeError）
+                cb = getattr(engine, "on_error", None)
+                if cb is not None:
+                    try:
+                        cb(f"音频读取失败: {e}")
+                    except Exception:  # noqa: BLE001
+                        pass
             break
         if pcm:
             engine.push_audio(pcm)

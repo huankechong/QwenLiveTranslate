@@ -271,11 +271,3 @@ class LiveTranslateClient:
             "audio": base64.b64encode(pcm).decode("ascii"),
         })
 
-
-def push_audio_forever(client: LiveTranslateClient, capture, stop_flag: threading.Event):
-    """推流循环（薄别名→providers.engine_io.engine_push_loop）。
-
-    保留原符号以兼容既有引用；实现已泛化为引擎无关版本。
-    """
-    from providers.engine_io import engine_push_loop
-    return engine_push_loop(client, capture, stop_flag)

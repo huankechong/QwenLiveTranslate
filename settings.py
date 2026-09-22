@@ -7,6 +7,7 @@ settings.json（仅存本机，git 已忽略该文件）。环境变量始终优
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 
 
@@ -18,6 +19,10 @@ def _base_dir() -> Path:
 
 
 SETTINGS_PATH = _base_dir() / "settings.json"
+
+# 读-改-写序列互斥（第 8 轮审计 M2：UI 线程 update 与重连/worker 线程
+# resolve 交错时有丢失更新窗口；load/save 各自原子但序列不互斥）
+_RW_LOCK = threading.Lock()
 
 DEFAULTS = {
     "source": "mic",            # mic | loopback
@@ -99,12 +104,13 @@ def save(data: dict):
 
 
 def update(**kwargs) -> dict:
-    data = load()
-    for k, v in kwargs.items():
-        if k in DEFAULTS:
-            data[k] = v
-    save(data)
-    return data
+    with _RW_LOCK:
+        data = load()
+        for k, v in kwargs.items():
+            if k in DEFAULTS:
+                data[k] = v
+        save(data)
+        return data
 
 
 def resolve_provider_cfg(pid: str) -> dict:
@@ -114,6 +120,11 @@ def resolve_provider_cfg(pid: str) -> dict:
     ② 顶层旧 api_key（qwen 专属回退，老用户零感知升级）
     ③ 空档 → 引擎层自会回退环境变量（DASHSCOPE_API_KEY 等）
     """
+    with _RW_LOCK:
+        return _resolve_provider_cfg_unlocked(pid)
+
+
+def _resolve_provider_cfg_unlocked(pid: str) -> dict:
     data = load()
     profiles = (data.get("provider_configs") or {}).get(pid) or []
     if profiles:
