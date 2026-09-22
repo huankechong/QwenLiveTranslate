@@ -32,11 +32,11 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 | Caption cleanup | **🗑 Clear captions** button / `Ctrl+Alt+Backspace` clears current + history lines |
 | **Self-healing connection** | Auto-reconnects on unexpected disconnect (backoff 5s/15s/45s, 3 attempts); captions preserved; multi-screen aware |
 | Real-time interpretation | Speech → source transcript (ASR) → translation, streamed bilingually |
-| Floating captions | Translucent rounded always-on-top window; draggable; click-through toggle via `Ctrl+Alt+Space` |
+| Floating captions | Translucent rounded always-on-top window; draggable; fade in/out transitions; incremental streaming writes (flicker-free); click-through toggle via `Ctrl+Alt+Space` |
 | **Edge resize** | Drag left/right edges for width, bottom/corner for height (persisted on release; double-click restores auto height) |
 | Appearance tuning | Font scale 0.7~2.0× / opacity / line-count sliders live-adjusting (values shown instantly); show-original & latency toggles |
 | Caption trimming | `display_sentences` slider (1–10): sentences merged into paragraphs (CJK seamless, smart Latin spacing), oldest trimmed beyond the limit |
-| History | SQLite per final sentence; double-click row to copy; one-click CSV export (UTF-8-BOM) |
+| History | SQLite per final sentence; double-click row to copy; one-click Excel (.xlsx, real datetime cells & styled) or CSV export (UTF-8-BOM) |
 | Window memory | Caption position & size restored across launches |
 | Latency badge | Optional per-sentence latency display (`Ctrl` toggle in console) |
 | Dual sources | Microphone & system audio (WASAPI loopback) with 16 kHz resampling |
@@ -122,9 +122,10 @@ qwen-livetranslate/
 ├── console.py           # Graphical console (source/lang/start-stop/appearance/history)
 ├── controller.py        # Session controller (capture+WS+push lifecycle, auto-reconnect)
 ├── realtime_client.py   # WebSocket protocol layer (qwen3.8 event routing)
+├── providers/          # Engine abstraction (LiveEngine facade, registry, generic push loop; qwen wrapper; groundwork for multi-model)
 ├── capture.py           # Audio capture (mic / loopback + resampling)
 ├── overlay.py           # Caption overlay (streaming, trimming, geometry memory, click-through)
-├── history.py           # History storage (SQLite, thread-safe, CSV export)
+├── history.py           # History storage (SQLite, thread-safe, CSV/xlsx export)
 ├── history_view.py      # History window (table/copy/export/clear)
 ├── settings.py          # settings.json persistence
 ├── config.py            # Static config (endpoint/audio/hotkeys/version)
