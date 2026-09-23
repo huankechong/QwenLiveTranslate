@@ -1,7 +1,7 @@
 """静态配置：API 端点与音频参数（UI 可调项见 settings.py，此处只放协议/硬件级常量）。"""
 
 # ============ 版本（SemVer；发布时与 git tag 对齐） ============
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 # ============ API ============
 API_KEY_ENV = "DASHSCOPE_API_KEY"
