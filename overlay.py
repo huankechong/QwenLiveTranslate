@@ -209,29 +209,63 @@ class CaptionOverlay(QWidget):
         btn_h = 24
         pads = 8 + 4 + 4 + 8 + 4   # 上下边距+间距
         auto_total = pads + btn_h + status_h + trans_h + (src_h if show_orig else 0)
-        # 用户拖出的高度优先（None=自适应）；至少能装下按钮行+状态行
+        # 用户拖出的高度优先（None=自适应）；至少能装下按钮行+状态行。
+        # 极端矮窗护栏：用户高度装不下"两块各一行+固定件"时，忽略用户
+        # 高度、退回自适应（原文只显示一两句的最终解——窗口太矮是物理
+        # 无解，撑到能装下为止）
         min_total = pads + btn_h + status_h + 40
+        if show_orig:
+            bare_min = (pads + btn_h + status_h
+                        + (_line_h(fs_orig) + 4) + (_line_h(fs_trans) + 4))
+            min_total = max(min_total, bare_min)
         total = max(min_total, int(cfg["height"])) if cfg.get("height") else auto_total
 
         # ---------- 文本块高度分配（修复拖小时重叠） ----------
         # 可用空间 = 总高 - 非文本部分。旧代码只处理"拖大给译文"，
         # 拖小时 src/trn 固定高度之和超出可用空间 → 布局压缩重叠。
-        # 现按需求分配：富余全给译文；不足时按各自保底（≥1 行）削减。
+        # 现按需求分配：富余全给译文；不足时按【需求比例】削减（各保底
+        # 2 行）——按需削减会把原文削到 1 行（用户实测"原文只能显示
+        # 一两句"），比例削减保住原文的合理占比。
         avail = total - (pads + btn_h + status_h)
         if show_orig:
-            h_min_src = _line_h(fs_orig) + 4   # 各保底一行
-            h_min_trn = _line_h(fs_trans) + 4
+            floor2_src = 2 * _line_h(fs_orig) + 4   # 目标保底：两行（v1.0.4 反馈）
+            floor2_trn = 2 * _line_h(fs_trans) + 4
+            floor1_src = _line_h(fs_orig) + 4       # 极端下限：一行
+            floor1_trn = _line_h(fs_trans) + 4
+            # 保底优先级（空间紧张时逐级退让，译文先让路）：
+            # both2 → src2+trn1 → both1（bare_min 护栏保证 both1 恒可达）
+            if floor2_src + floor2_trn <= avail:
+                h_min_src, h_min_trn = floor2_src, floor2_trn
+            elif floor2_src + floor1_trn <= avail:
+                h_min_src, h_min_trn = floor2_src, floor1_trn
+            else:
+                h_min_src, h_min_trn = floor1_src, floor1_trn
             want_src = max(h_min_src, src_h)
             want_trn = max(h_min_trn, trans_h)
             if want_src + want_trn <= avail:
                 src_alloc = want_src            # 富余（拖大）：增量全给译文
                 trn_alloc = avail - want_src
-            else:                               # 不足（拖小）：按需削减防重叠
+            else:                               # 不足（拖小）：按需求比例削减
                 over = want_src + want_trn - avail
-                src_cut = min(over, want_src - h_min_src)
-                trn_cut = min(over - src_cut, want_trn - h_min_trn)
-                src_alloc = want_src - src_cut
-                trn_alloc = want_trn - trn_cut
+                cut_src = max(h_min_src,
+                              want_src - round(over * want_src / (want_src + want_trn)))
+                cut_trn = max(h_min_trn,
+                              want_trn - round(over * want_trn / (want_src + want_trn)))
+                # 比例削完仍超（某块已到保底）：剩余缺口从【另一块】扣，
+                # 且被扣块自身不许击穿保底——击穿则本块回吐（宁超不叠）
+                rest = cut_src + cut_trn - avail
+                while rest > 0:
+                    moved = False
+                    if cut_src > h_min_src:
+                        give = min(rest, cut_src - h_min_src)
+                        cut_src -= give; rest -= give; moved = True
+                    if cut_trn > h_min_trn:
+                        give = min(rest, cut_trn - h_min_trn)
+                        cut_trn -= give; rest -= give; moved = True
+                    if not moved:
+                        break  # 双双保底仍超（极端矮窗）：layout 已尽力，接受
+                src_alloc = cut_src
+                trn_alloc = cut_trn
             self.src_browser.setFixedHeight(src_alloc)
             self.trn_browser.setFixedHeight(trn_alloc)
         else:
@@ -544,18 +578,26 @@ class CaptionOverlay(QWidget):
             pass
 
     def _relayout_browsers(self):
-        """窗口高度变化后，把增量分配给译文块（原文块保持行数高度）。"""
+        """窗口高度变化后，把增量分配给译文块（原文块保持行数高度）。
+
+        只处理【拖大】（avail 有富余全给译文）；拖小由 apply_cfg 的
+        比例分配负责——这里若抢着 setFixedHeight 会把 apply_cfg 刚算好
+        的原文两行保底压回一行（v1.0.4 后续反馈的根因之一）。
+        译文保底两行，不足则不动（等下次 apply_cfg）。"""
         pads = 8 + 4 + 4 + 8 + 4
         fixed = pads + 24 + 16  # 按钮+状态行
-        rest = self.height() - fixed - (self.src_browser.height()
-                                        if self.cfg.get("show_original", True) else 0)
-        if rest > 40:
+        src_h = (self.src_browser.height()
+                 if self.cfg.get("show_original", True) else 0)
+        rest = self.height() - fixed - src_h
+        if rest > 2 * _line_h(max(11, int(17 * float(self.cfg.get("font_scale", 1.0))))) + 4:
             self.trn_browser.setFixedHeight(rest)
 
     def resizeEvent(self, e):
         """OS 原生缩放驱动的高度变化分配给译文块。"""
         super().resizeEvent(e)
-        self._relayout_browsers()
+        # 延迟到布局稳定后重分配（resize 中 height() 可能是旧值）
+        from PySide6.QtCore import QTimer as _QTimer
+        _QTimer.singleShot(0, self._relayout_browsers)
 
     # ---------- 拖动 & 穿透 & 隐藏 ----------
     def mousePressEvent(self, e):
