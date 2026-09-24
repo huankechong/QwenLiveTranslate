@@ -1,6 +1,6 @@
 # QwenLiveTranslate 项目交接文档
 
-> 生成日期：2026-09-24 ｜ 版本：**v1.0.5（`fbea43b` + 1.0.5 发版提交）** ｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
+> 生成日期：2026-09-24（更新于同日 v1.0.5 发布后）｜ 版本：**v1.0.5（HEAD `6e8bda5`）** ｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
 > 配套记忆：`.workbuddy/memory/2026-09-19~23.md`（每日开发日志，含全部决策上下文）
 
 ---
@@ -57,7 +57,8 @@ qwen-livetranslate/
 │   └── test_ui_smoke.py      # UI 冒烟/动画/布局矩阵
 ├── .github/workflows/ci.yml  # 双 job：test（offscreen pytest）+ build→release（打 tag 触发）
 ├── README.md / README.en.md  # 中英双语（已与实现对齐，第 9 轮审计）
-├── CHANGELOG.md          # Keep a Changelog，1.0.0~1.0.4 完整
+├── HANDOFF.md            # 本文档：交接手册（架构/流程/坑/红线/迁移清单）
+├── CHANGELOG.md          # Keep a Changelog，1.0.0~1.0.5 完整
 └── QwenLiveTranslate.spec
 ```
 
@@ -171,7 +172,7 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 ### 快速验证清单（接手后 10 分钟自检）
 
 ```bash
-git log --oneline -3          # 应见 1.0.5 发版提交在顶
+git log --oneline -3          # 应见 "Release v1.0.5" 在顶（6e8bda5）
 git status --short            # 干净（无未提交/未跟踪文件）
 pytest tests/ -q              # 38 passed
 python -c "import config; print(config.__version__)"   # 1.0.5
