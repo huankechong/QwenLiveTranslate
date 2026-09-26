@@ -28,10 +28,13 @@ from pathlib import Path
 
 
 def _db_path() -> Path:
-    """打包成 exe 后 __file__ 指向临时解压目录，改用 exe 所在目录。"""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "translation_history.db"
-    return Path(__file__).parent / "translation_history.db"
+    """历史库路径跟随 settings 的目录策略（含只读目录回退，M1 同修）。
+
+    打包成 exe 后 __file__ 指向临时解压目录；Program Files 等
+    只读场景由 settings._base_dir 统一回退 %APPDATA%。
+    """
+    import settings as _st
+    return _st._base_dir() / "translation_history.db"
 
 
 def db_dir() -> Path:

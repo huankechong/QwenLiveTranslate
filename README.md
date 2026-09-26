@@ -134,7 +134,6 @@ qwen-livetranslate/
 ├── start.bat            # 双击启动（脚本方式，key 已 setx）
 ├── sample_16k.wav       # 端到端测试样本（中文）
 ├── sample_en_16k.wav    # 端到端测试样本（英语）
-├── e2e_*.txt            # 端到端验证日志（协议联调实录）
 ├── requirements.txt     # 运行时依赖
 ├── requirements-dev.txt # 开发/测试依赖（pytest、pyinstaller）
 ├── README.en.md         # 英文版 README

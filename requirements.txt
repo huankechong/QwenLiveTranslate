@@ -1,5 +1,5 @@
 websocket-client>=1.8
-PySide6>=6.7
+PySide6>=6.7,<7    # 上界防 7.x 破坏性升级打爆 CI（审计 L3）
 PyAudioWPatch>=0.2.12
 keyboard>=0.13.5
 openpyxl>=3.1

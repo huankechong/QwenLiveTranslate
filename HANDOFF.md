@@ -135,8 +135,9 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 | 🟡 | capture.stop() 非线程安全 | `_stream=None` 无锁，靠 PyAudio 异常+推流侧兜底"巧合性安全"；防御重构风险>收益，第 8 轮审计决定注记不修 |
 | 🟡 | M1 遗留：`_relayout_browsers` 与 `apply_cfg` 的双重写权 | v1.0.4 后 relayout 已去覆盖化（只处理拖大），但两个写点并存仍是复杂度来源——Phase 1 动布局时建议合并为单一分配函数 |
 | 🟡 | 测试盲区 | `engine_io` 错误路径已补测，但 `resizeEvent`/拖拽缩放（WM_NCHITTEST 路径）无自动化——改 overlay 布局必须真机验证 |
-| 🟢 | e2e_*.txt 三个 0KB 空日志 | 历史遗留，可删 |
+| 🟢 | ~~e2e_*.txt~~ | 已删（第 11 轮审计 L4） |
 | 🟢 | sample_16k.wav 系测试资产 | 端到端验证脚本曾用，现在测试已不引用——保留无害 |
+| 🟢 | ~~e2e 空日志~~ | 已删（R11-L4） |
 | 🟢 | `__pycache__` 陷阱 | **offscreen 测试改代码后必须 `rm -rf __pycache__` + `python -B`**，否则跑旧字节码——9/23 排障被坑 5 轮 |
 
 ## 10. 潜在风险与红线

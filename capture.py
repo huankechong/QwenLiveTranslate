@@ -127,10 +127,6 @@ class AudioCapture:
             pos += step
         return out.tobytes()
 
-    # 兼容旧名（内部调用方迁移用）
-    def _resample_16k(self, pcm: bytes, src_rate: int) -> bytes:
-        return self._resample(pcm, src_rate, 16000)
-
     # ---------- 对外 ----------
     def start(self):
         self._pa = pyaudio.PyAudio()

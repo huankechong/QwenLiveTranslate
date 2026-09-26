@@ -11,11 +11,49 @@ import threading
 from pathlib import Path
 
 
+def _writable_dir(p: Path) -> bool:
+    """目录可写探测（Program Files 等 UAC 保护目录会 False）。"""
+    try:
+        probe = p / ".write_probe"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def _base_dir() -> Path:
-    """打包成 exe 后 __file__ 指向临时解压目录，改用 exe 所在目录存设置。"""
+    """数据目录策略（第 11 轮审计 M1：exe 装进 Program Files 时写盘静默失败）。
+
+    优先 exe 旁/脚本旁（绿色便携，历史行为）；目录只读时回退
+    %APPDATA%\\QwenLiveTranslate（一次性迁移旧 settings.json，
+    用户零感知）。crash.log / translation_history.db 同目录受益。
+    """
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).parent
+        base = Path(sys.executable).parent
+    else:
+        base = Path(__file__).parent
+    if _writable_dir(base):
+        return base
+    # 只读回退：APPDATA（连 APPDATA 都不可写时退回原目录，save 的
+    # except 兜底——极端情况设置不持久但不崩）
+    fallback = Path(os.environ.get("APPDATA", str(base))) / "QwenLiveTranslate"
+    try:
+        fallback.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return base
+    if not _writable_dir(fallback):
+        return base
+    # 一次性迁移旧配置（存在且目标缺才搬）
+    old = base / "settings.json"
+    new = fallback / "settings.json"
+    try:
+        if old.exists() and not new.exists():
+            import shutil
+            shutil.copy2(old, new)
+    except OSError:
+        pass
+    return fallback
 
 
 SETTINGS_PATH = _base_dir() / "settings.json"
