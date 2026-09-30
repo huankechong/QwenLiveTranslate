@@ -309,3 +309,152 @@ class TestTrimFitsViewport:
         qapp.processEvents()
         assert len(o2.src_browser.property("sent_starts")) == 3
         o2.close()
+
+
+class TestPhase1Components:
+    def test_registry_presets(self):
+        """P1：1 integrated + 1 asr + 3 mt（三免费翻译预设）。"""
+        import providers.registry as reg
+        assert len(reg.iter_by_kind("mt")) == 3
+        assert len(reg.iter_by_kind("asr")) == 1
+        assert len(reg.iter_by_kind("integrated")) == 1
+
+    def test_translate_error_semantics(self):
+        """错误分类：可重试（timeout/network/429/5xx）vs 永久（401/402/4xx）。"""
+        from providers.mt.errors import TranslateError, from_http_status
+        assert TranslateError("timeout", "x").retryable
+        assert from_http_status(429).retryable
+        assert from_http_status(500).retryable
+        assert not from_http_status(401).retryable
+        assert not from_http_status(402).retryable
+        assert "key" in from_http_status(401).user_message()
+
+    def test_vad_segmentation(self):
+        """VAD：语音+静音切句；超长强切；静音丢弃。"""
+        import array
+        import math
+        from providers.vad import VadSegmenter
+        tone = array.array(
+            "h", [int(8000 * math.sin(i * 0.05)) for i in range(1600)]
+        ).tobytes()
+        silence = b"\x00" * 3200
+        segs, started = [], []
+        v = VadSegmenter(lambda: started.append(1), segs.append)
+        for _ in range(3):
+            v.feed(tone)
+        for _ in range(5):
+            v.feed(silence)
+        assert len(segs) == 1 and started
+        # 超长强切（max_ms=1500 → 15 帧后切）
+        segs2 = []
+        v2 = VadSegmenter(lambda: None, segs2.append, max_ms=1500)
+        for _ in range(25):
+            v2.feed(tone)
+        assert len(segs2) >= 1
+
+    def test_worker_retry_and_permanent(self):
+        """worker：直通成功 / 401 立即放弃上报 / stop 幂等。"""
+        import time
+        from providers.translation_worker import TranslationWorker
+        from providers.mt.errors import TranslateError
+
+        outs, errs = [], []
+
+        class FakeTr:
+            def __init__(self, err=None):
+                self.err = err
+                self.calls = 0
+
+            def translate(self, text, s, t, is_stale=None):
+                self.calls += 1
+                if self.err:
+                    raise self.err
+                return f"T:{text}"
+
+        tr = FakeTr()
+        w = TranslationWorker(tr, lambda t, f: outs.append(t), errs.append)
+        w.start()
+        w.submit("hi")
+        time.sleep(0.4)
+        w.stop()
+        assert outs == ["T:hi"]
+        # 401 永久失败
+        tr2 = FakeTr(TranslateError("auth", "bad", 401))
+        outs.clear()
+        w2 = TranslationWorker(tr2, lambda t, f: outs.append(t), errs.append)
+        w2.start()
+        w2.submit("x")
+        time.sleep(0.4)
+        w2.stop()
+        assert outs == [] and len(errs) == 1 and tr2.calls == 1
+
+    def test_pipeline_event_flow(self):
+        """SeparatedPipeline：ASR 终稿直通 UI + 经 worker 出译文。"""
+        import threading
+        import time
+        from providers.base import AudioSpec
+        from providers.pipeline import SeparatedPipeline
+
+        events = []
+
+        class FakeAsr:
+            provider_id = "a"
+            display_name = "FA"
+            audio_spec = AudioSpec(16000)
+
+            def __init__(self):
+                self.connected = threading.Event()
+                self.session_ready = threading.Event()
+                self.on_source = None
+
+            def connect(self, timeout=15):
+                self.connected.set()
+                self.session_ready.set()
+                return True
+
+            def push_audio(self, pcm):
+                pass
+
+            def close(self):
+                pass
+
+        class FakeMt:
+            model = "FM"
+
+            def translate(self, text, s, t, is_stale=None):
+                return f"译:{text}"
+
+        cb = (lambda sp, t, f: events.append(("src", t)),
+              lambda t, f: events.append(("trn", t)),
+              lambda m: events.append(("st", m)),
+              lambda m: events.append(("err", m)),
+              lambda c, m: events.append(("disc", c)))
+        fa = FakeAsr()
+        pipe = SeparatedPipeline(fa, FakeMt(), cb)
+        assert pipe.connect()
+        fa.on_source(None, "hello world", True)
+        time.sleep(0.6)
+        pipe.close()
+        assert ("src", "hello world") in events
+        assert any(k == "trn" and v == "译:hello world" for k, v in events)
+
+    def test_engine_card_ui(self, qapp):
+        """控制台引擎卡片：模式下拉切换可见性、registry 填充。"""
+        import console as C
+        win = C.Console()
+        win.show()
+        qapp.processEvents()
+        # 默认一体化：ASR/MT 行隐藏
+        assert not win.cmb_asr.isVisible()
+        # 切分离式
+        win.cmb_engine_mode.setCurrentIndex(1)
+        qapp.processEvents()
+        assert win.cmb_asr.isVisible() and win.cmb_mt.isVisible()
+        assert win.cmb_asr.count() >= 1 and win.cmb_mt.count() >= 3
+        import settings as st
+        assert st.load().get("engine_mode") == "separated"
+        # 还原默认（一体化）
+        win.cmb_engine_mode.setCurrentIndex(0)
+        qapp.processEvents()
+        assert st.load().get("engine_mode") == "integrated"
+        win.close()

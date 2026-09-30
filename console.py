@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import queue
 import sys
+import threading
 import time
 
 from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
@@ -283,6 +284,46 @@ class Console(QWidget):
 
         root.addWidget(card)
 
+        # ---- 翻译引擎（Phase 1：一体化/分离式切换 + ASR/MT 选配）----
+        card_e = QFrame()
+        card_e.setObjectName("card")
+        ce = QVBoxLayout(card_e)
+        ce.setContentsMargins(16, 12, 16, 12)
+        ce.setSpacing(8)
+        ce.addWidget(_lbl("翻译引擎"))
+
+        row_mode = QHBoxLayout()
+        row_mode.setSpacing(8)
+        row_mode.addWidget(_lbl("模式"))
+        self.cmb_engine_mode = QComboBox()
+        self.cmb_engine_mode.addItem("Qwen 一体化（推荐）", "integrated")
+        self.cmb_engine_mode.addItem("分离式组合（ASR+翻译）", "separated")
+        self.cmb_engine_mode.currentIndexChanged.connect(self._on_engine_mode)
+        row_mode.addWidget(self.cmb_engine_mode, 1)
+        ce.addLayout(row_mode)
+
+        row_asr = QHBoxLayout()
+        row_asr.setSpacing(8)
+        self.lab_asr = _lbl("识别")
+        self.cmb_asr = QComboBox()
+        row_asr.addWidget(self.lab_asr)
+        row_asr.addWidget(self.cmb_asr, 1)
+        ce.addLayout(row_asr)
+
+        row_mt = QHBoxLayout()
+        row_mt.setSpacing(8)
+        self.lab_mt = _lbl("翻译")
+        self.cmb_mt = QComboBox()
+        row_mt.addWidget(self.lab_mt)
+        row_mt.addWidget(self.cmb_mt, 1)
+        ce.addLayout(row_mt)
+
+        self.btn_engine_test = _btn("测试连接")
+        self.btn_engine_test.clicked.connect(self._on_engine_test)
+        ce.addWidget(self.btn_engine_test)
+        root.addWidget(card_e)
+        self._init_engine_card()
+
         # ---- API Key ----
         card_k = QFrame()
         card_k.setObjectName("card")
@@ -412,6 +453,84 @@ class Console(QWidget):
         root.addStretch(1)
 
     # ================= 初始化辅助 =================
+    # ---------- 翻译引擎卡片（Phase 1）----------
+    def _init_engine_card(self):
+        """按 registry 填充 ASR/MT 下拉并回显当前配置。"""
+        import providers.registry as reg
+        self.cmb_asr.blockSignals(True)
+        self.cmb_mt.blockSignals(True)
+        self.cmb_asr.clear()
+        self.cmb_mt.clear()
+        for spec in reg.iter_by_kind("asr"):
+            self.cmb_asr.addItem(spec.display_name, spec.id)
+        for spec in reg.iter_by_kind("mt"):
+            self.cmb_mt.addItem(spec.display_name, spec.id)
+        # 回显
+        mode = self.cfg.get("engine_mode", "integrated")
+        self.cmb_engine_mode.setCurrentIndex(1 if mode == "separated" else 0)
+        asr_pid = self.cfg.get("asr_provider") or "siliconflow_sensevoice"
+        mt_pid = self.cfg.get("mt_provider") or "siliconflow_chat"
+        i = self.cmb_asr.findData(asr_pid)
+        if i >= 0:
+            self.cmb_asr.setCurrentIndex(i)
+        j = self.cmb_mt.findData(mt_pid)
+        if j >= 0:
+            self.cmb_mt.setCurrentIndex(j)
+        self.cmb_asr.currentIndexChanged.connect(self._on_engine_pick)
+        self.cmb_mt.currentIndexChanged.connect(self._on_engine_pick)
+        self.cmb_asr.blockSignals(False)
+        self.cmb_mt.blockSignals(False)
+        self._sync_engine_visibility()
+
+    def _sync_engine_visibility(self):
+        """分离式才显示 ASR/MT 行；一体化折叠。"""
+        sep = self.cmb_engine_mode.currentData() == "separated"
+        for w in (self.lab_asr, self.cmb_asr, self.lab_mt, self.cmb_mt):
+            w.setVisible(sep)
+
+    def _on_engine_mode(self):
+        mode = self.cmb_engine_mode.currentData()
+        self.cfg["engine_mode"] = mode
+        st.update(engine_mode=mode)
+        self._sync_engine_visibility()
+        self._restart_if_running()
+
+    def _on_engine_pick(self):
+        asr_pid = self.cmb_asr.currentData() or ""
+        mt_pid = self.cmb_mt.currentData() or ""
+        self.cfg["asr_provider"] = asr_pid
+        self.cfg["mt_provider"] = mt_pid
+        st.update(asr_provider=asr_pid, mt_provider=mt_pid)
+        self._restart_if_running()
+
+    def _on_engine_test(self):
+        """后台线程测试当前引擎连通性（结果写错误标签，不打断 UI）。"""
+        cfg = dict(self.cfg)
+
+        def _test():
+            try:
+                from providers import build_engine
+                cb = (lambda *a: None,) * 4 + (lambda *a: None,)
+                eng = build_engine(cfg, cb)
+                if hasattr(eng, "_asr"):  # 分离式
+                    ok1, msg1 = eng._asr._client.test_connection()
+                    ok2, msg2 = eng._worker.translator.test_connection()
+                    text = f"识别: {msg1} | 翻译: {msg2}"
+                    ok = ok1 and ok2
+                else:  # 一体化：key 存在性检查（真连网由启停路径完成）
+                    key = cfg.get("api_key") or os.environ.get(config.API_KEY_ENV, "")
+                    ok, text = (True, "key 已配置（连接由启动验证）") if key else (False, "未配置 key")
+            except Exception as e:  # noqa: BLE001
+                ok, text = False, f"测试失败: {e}"
+            def _show():
+                self.lbl_err.setText(("✅ " if ok else "⚠️ ") + text)
+                self.lbl_err.setStyleSheet(
+                    f"color:{'#22a06b' if ok else '#e5484d'};"
+                    " font-size:11px; font-weight:600;")
+            QTimer.singleShot(0, _show)
+
+        threading.Thread(target=_test, daemon=True).start()
+
     def refresh_key_status(self):
         """key 状态灯：settings 里的 key 优先，否则看环境变量。"""
         saved = self.cfg.get("api_key", "").strip()
