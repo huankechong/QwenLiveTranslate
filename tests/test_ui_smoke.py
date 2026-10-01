@@ -330,7 +330,7 @@ class TestPhase1Components:
         assert "key" in from_http_status(401).user_message()
 
     def test_vad_segmentation(self):
-        """VAD：语音+静音切句；超长强切；静音丢弃。"""
+        """VAD：学习期后语音+静音切句；高噪冷启动不误报；超长强切。"""
         import array
         import math
         from providers.vad import VadSegmenter
@@ -338,19 +338,30 @@ class TestPhase1Components:
             "h", [int(8000 * math.sin(i * 0.05)) for i in range(1600)]
         ).tobytes()
         silence = b"\x00" * 3200
+        # 场景1：静音环境冷启动 → 语音 → 静音 → 一句
         segs, started = [], []
         v = VadSegmenter(lambda: started.append(1), segs.append)
+        for _ in range(10):
+            v.feed(silence)          # 学习期（静音，噪底校准到低位）
         for _ in range(3):
             v.feed(tone)
         for _ in range(5):
             v.feed(silence)
         assert len(segs) == 1 and started
-        # 超长强切（max_ms=1500 → 15 帧后切）
-        segs2 = []
-        v2 = VadSegmenter(lambda: None, segs2.append, max_ms=1500)
+        # 场景2（R13-M2）：高噪冷启动——学习期不误报
+        started2 = []
+        v2 = VadSegmenter(lambda: started2.append(1), lambda p: None)
+        for _ in range(12):
+            v2.feed(tone)            # 学习期+之后全是"高噪"
+        assert len(started2) == 0    # 噪底已拉高 → 不再当语音
+        # 场景3：超长强切（max_ms=1500；学习期帧也计入 max 计数前先静音学完）
+        segs3 = []
+        v3 = VadSegmenter(lambda: None, segs3.append, max_ms=1500)
+        for _ in range(10):
+            v3.feed(silence)         # 学习期
         for _ in range(25):
-            v2.feed(tone)
-        assert len(segs2) >= 1
+            v3.feed(tone)
+        assert len(segs3) >= 1
 
     def test_worker_retry_and_permanent(self):
         """worker：直通成功 / 401 立即放弃上报 / stop 幂等。"""

@@ -41,7 +41,7 @@ class QwenEngine(LiveEngine):
         if not key:
             return False, "未配置 key"
         req = urllib.request.Request(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            config.DASHSCOPE_MODELS_URL,
             headers={"Authorization": f"Bearer {key}"})
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:

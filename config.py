@@ -9,6 +9,8 @@ WS_URL = (
     "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
     "?model=qwen3.8-livetranslate-flash-realtime"
 )
+# 探活端点（test_connection 用；与 realtime 端点同源不同路径）
+DASHSCOPE_MODELS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
 
 # ============ 音频 ============
 SAMPLE_RATE = 16000        # DashScope realtime 要求 16kHz

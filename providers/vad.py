@@ -22,19 +22,22 @@ class VadSegmenter:
     def __init__(self, on_speech_started, on_segment,
                  frame_ms: int = 100,
                  hangover_ms: int = 300,
-                 max_ms: int = 8000,   # 硅基流动 ASR 尾延迟高，段小成功率显著更好
-                 start_rms_ratio: float = 3.0):
+                 max_ms: int = 8000,
+                 start_rms_ratio: float = 3.0,
+                 warmup_frames: int = 10):
         self.on_speech_started = on_speech_started  # () -> None
         self.on_segment = on_segment                # (pcm: bytes) -> None
         self.frame_ms = frame_ms
         self.hangover_frames = max(1, hangover_ms // frame_ms)
         self.max_frames = max(1, max_ms // frame_ms)
         self.start_rms_ratio = start_rms_ratio
+        self.warmup_frames = warmup_frames  # R13-M2：冷启动学习期帧数
 
         self._buf: list[bytes] = []
         self._frames_in_seg = 0
         self._silence_run = 0
         self._speaking = False
+        self._frames_seen = 0
         # 噪声底（滑动最小 RMS，缓慢跟随）
         self._noise_floor = 60.0
         self._lock = threading.Lock()
@@ -72,14 +75,23 @@ class VadSegmenter:
 
     # ---------- 对外 ----------
     def feed(self, pcm: bytes) -> None:
-        """喂一帧（与 AudioCapture.read_chunk 同节拍 ~100ms）。"""
+        """喂一帧（与 AudioCapture.read_chunk 同节拍 ~100ms）。
+
+        前 warmup_frames 帧为学习期：只校准噪声底、不触发任何回调
+        （R13-M2：嘈杂环境冷启动时避免把环境音当语音，误报状态/
+        错置延迟计时起点）。"""
         with self._lock:
             rms = self._rms(pcm)
+            self._frames_seen += 1
             # 噪声底：静音期缓慢下探、任何期缓慢回升（防误吃高噪声）
             if rms < self._noise_floor:
                 self._noise_floor = 0.9 * self._noise_floor + 0.1 * rms
             else:
-                self._noise_floor = min(400.0, 0.995 * self._noise_floor + 0.005 * rms)
+                # 学习期内快速拉高（1 秒内跟上真实环境），之后慢速跟随
+                alpha = 0.3 if self._frames_seen <= self.warmup_frames else 0.005
+                self._noise_floor = min(4000.0, (1 - alpha) * self._noise_floor + alpha * rms)
+            if self._frames_seen <= self.warmup_frames:
+                return  # 学习期：只校准，不判音
             threshold = max(80.0, self._noise_floor * self.start_rms_ratio)
 
             if rms > threshold:

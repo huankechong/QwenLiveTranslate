@@ -60,7 +60,6 @@ jobs:
         id: notes
         run: |
           # 从 CHANGELOG.md 提取本 tag 版本段（## [X.Y.Z] 到下一个 ## 之间）
-          TAG="${GITHUB_REF_NAME#v}"
           python3 - << 'EOF'
           import os, re
           tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
