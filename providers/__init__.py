@@ -18,10 +18,24 @@ from .pipeline import SeparatedPipeline
 
 
 def _resolve(cfg: dict, pid: str) -> dict:
-    """取引擎配置档（settings.resolve_provider_cfg 的本地快捷包装）。"""
+    """取引擎配置档（三级回退：档 → 顶层 key → 环境变量）。
+
+    env 层按 registry 里该 provider 声明的 env_keys 依次兜底
+    （P1 自审 E1：此前 env_keys 声明了却无人消费，env 配置静默失效）。
+    """
+    import os
+
     import settings as st
     prof = st.resolve_provider_cfg(pid)
-    prof.setdefault("api_key", cfg.get("api_key") or "")
+    if not (prof.get("api_key") or "").strip():
+        prof["api_key"] = cfg.get("api_key") or ""
+    if not (prof.get("api_key") or "").strip():
+        spec = registry.get(pid)
+        for env_name in (spec.env_keys if spec else ()):
+            v = os.environ.get(env_name, "").strip()
+            if v:
+                prof["api_key"] = v
+                break
     return prof
 
 

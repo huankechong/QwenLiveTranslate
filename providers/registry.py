@@ -51,6 +51,7 @@ register(ProviderSpec(
     display_name="硅基流动 SenseVoice（免费）",
     defaults={"model": "FunAudioLLM/SenseVoiceSmall",
               "base_url": "https://api.siliconflow.cn/v1"},
+    env_keys=("SILICONFLOW_API_KEY",),
 ))
 
 # ---- 分离式翻译（Phase 1：三个免费预设，一个类全盖）----

@@ -112,6 +112,7 @@ class BatchAsrStream:
                  sample_rate: int = 16000):
         self._client = client
         self.on_source = on_source      # (speaker, text, final)
+        self._status_cb = on_status
         self.on_error_cb = on_error
         self.connected = threading.Event()
         self.session_ready = threading.Event()
@@ -123,11 +124,14 @@ class BatchAsrStream:
         self._sample_rate = sample_rate
 
     def _on_segment(self, pcm: bytes) -> None:
-        """VAD 成句 → WAV → 识别（网络错重试一次）→ 终稿回调。
+        """VAD 成句 → WAV → 识别（网络错退避重试）→ 终稿回调。
 
         识别在推流线程串行执行——重试期间推流暂停会让音频积压在
-        capture 侧，故只重试一次且仅网络类错误（HTTP 4xx 无意义）。"""
+        capture 侧，故只对网络类错误重试（1s/2s 退避共三次尝试；
+        HTTP 4xx 重试无意义）。切句即发 STOPPED 哨兵——console 的
+        延迟计时 A 口径以"静音断句"为起点（P1 自审 E2）。"""
         import time as _t
+        _safe(self._status_cb, "… 静音，翻译中")
         wav = pcm_to_wav(pcm, self._sample_rate)
         text = ""
         backoffs = (1.0, 2.0)
