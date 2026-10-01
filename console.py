@@ -522,28 +522,39 @@ class Console(QWidget):
         self.edit_ekey.setText((profs[0].get("api_key") or "") if profs else "")
 
     def _on_engine_key_edited(self):
-        """编辑完成：key 写入 ASR 预设档；MT 侧若同家（硅基流动）同步。"""
+        """编辑完成：key 只写入与 ASR 预设【同厂商域】的档。
+
+        R12-H1：旧版无条件写 ASR+MT 双档——跨厂商组合（ASR=硅基 +
+        MT=智谱）时硅基 key 被写进智谱档 → 测试连接必 401。
+        现按 spec.defaults.base_url 的域分组：ASR 档恒写，MT 档仅
+        同域才同步（跨厂商的 MT key 需在其档内另行填写——留空回退
+        通用 key/env 的语义不变）。"""
+        import providers.registry as reg
         text = self.edit_ekey.text().strip()
         asr_pid = self.cmb_asr.currentData() or ""
         mt_pid = self.cmb_mt.currentData() or ""
-        # 取当前完整配置 → 改档 → 整体存（settings.save 白名单外键走 provider_configs）
+
+        def _domain(pid):
+            spec = reg.get(pid) if pid else None
+            url = (spec.defaults or {}).get("base_url", "") if spec else ""
+            return url.split("//")[-1].split("/")[0].lower()
+
+        targets = [asr_pid] if asr_pid else []
+        if mt_pid and mt_pid != asr_pid and _domain(mt_pid) == _domain(asr_pid):
+            targets.append(mt_pid)
+
         data = st.load()
         cfgs = data.get("provider_configs") or {}
-        def _set(pid):
+        for pid in targets:
             profs = cfgs.get(pid)
             if not isinstance(profs, list) or not profs:
                 profs = [{}]
-            import providers.registry as reg
             spec = reg.get(pid) if pid else None
             profs[0]["api_key"] = text
-            if spec:  # 默认 model/base_url 一并固化进档（换档即用）
+            if spec:
                 for k, v in (spec.defaults or {}).items():
                     profs[0].setdefault(k, v)
             cfgs[pid] = profs
-        if asr_pid:
-            _set(asr_pid)
-        if mt_pid:
-            _set(mt_pid)
         data["provider_configs"] = cfgs
         st.update(**data)
         self._restart_if_running()

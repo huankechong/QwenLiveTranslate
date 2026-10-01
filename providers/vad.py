@@ -44,6 +44,10 @@ class VadSegmenter:
     def _rms(pcm: bytes) -> float:
         if not pcm:
             return 0.0
+        if len(pcm) % 2:  # R12-M1：协议面防御——奇数字节截齐再算
+            pcm = pcm[:len(pcm) // 2 * 2]
+            if not pcm:
+                return 0.0
         a = array.array("h")
         a.frombytes(pcm)
         n = len(a)

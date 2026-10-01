@@ -82,6 +82,8 @@ class HttpBatchAsr:
             raise from_http_status(e.code, txt) from None
         except (urllib.error.URLError, TimeoutError) as e:
             raise TranslateError("network", str(e)) from None
+        except (json.JSONDecodeError, ValueError):
+            raise TranslateError("permanent", "响应不是合法 JSON（服务异常页？）") from None
         return (data.get("text") or "").strip()
 
     def test_connection(self) -> tuple[bool, str]:

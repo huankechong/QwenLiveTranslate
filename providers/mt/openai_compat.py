@@ -73,6 +73,9 @@ class OpenAICompatTranslator:
             raise TranslateError("network", str(e)) from None
         except TimeoutError:
             raise TranslateError("timeout", "request timeout") from None
+        except (json.JSONDecodeError, ValueError):
+            # R12-H2：服务端返回非 JSON（HTML 错误页/空体）——permanent 而非 network
+            raise TranslateError("permanent", "响应不是合法 JSON（服务异常页？）") from None
         # 解析
         try:
             out = data["choices"][0]["message"]["content"]

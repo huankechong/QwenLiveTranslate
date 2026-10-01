@@ -495,3 +495,66 @@ class TestPhase15:
                             (lambda *a: None,) * 5)
         ok2, msg2 = eng2.test_connection()
         assert not ok2 and "未配置" in msg2
+
+
+class TestR12Fixes:
+    def test_key_no_cross_vendor_leak(self, qapp, tmp_path):
+        """R12-H1：跨厂商组合时 key 不串档（硅基 key 不进智谱档）。"""
+        import settings as st
+        st.SETTINGS_PATH = tmp_path / "settings.json"
+        import console as C
+        win = C.Console()
+        win.show()
+        qapp.processEvents()
+        win.cmb_engine_mode.setCurrentIndex(1)
+        qapp.processEvents()
+        i = win.cmb_mt.findData("bigmodel_glm4flash")
+        win.cmb_mt.setCurrentIndex(i)
+        qapp.processEvents()
+        win.edit_ekey.setText("sk-sf-only")
+        win._on_engine_key_edited()
+        pc = st.load().get("provider_configs") or {}
+        # 跨厂商：GLM 档完全不被创建（比空 key 更干净）
+        assert "bigmodel_glm4flash" not in pc
+        assert pc["siliconflow_sensevoice"][0]["api_key"] == "sk-sf-only"
+        # 同厂商仍同步
+        j = win.cmb_mt.findData("siliconflow_chat")
+        win.cmb_mt.setCurrentIndex(j)
+        qapp.processEvents()
+        win.edit_ekey.setText("sk-sf-both")
+        win._on_engine_key_edited()
+        pc = st.load().get("provider_configs") or {}
+        assert pc["siliconflow_sensevoice"][0]["api_key"] == "sk-sf-both"
+        assert pc["siliconflow_chat"][0]["api_key"] == "sk-sf-both"
+        win.close()
+
+    def test_non_json_response_classified_permanent(self):
+        """R12-H2：非 JSON 响应 → permanent（不误当 network 重试）。"""
+        import io
+        from unittest import mock
+        import providers.mt.openai_compat as OC
+        from providers.mt.openai_compat import OpenAICompatTranslator
+        from providers.mt.errors import TranslateError
+
+        class FakeResp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        t = OpenAICompatTranslator("sk-x", "m")
+        with mock.patch.object(OC.urllib.request, "urlopen",
+                               return_value=FakeResp(b"<html>err</html>")):
+            try:
+                t.translate("hi", "en", "zh")
+                raise AssertionError("should raise")
+            except TranslateError as e:
+                assert e.kind == "permanent" and not e.retryable
+
+    def test_vad_odd_byte_frame(self):
+        """R12-M1：奇数字节帧不抛 ValueError。"""
+        from providers.vad import VadSegmenter
+        v = VadSegmenter(lambda: None, lambda p: None)
+        v.feed(b"\x01\x02\x03")  # 1.5 样本
+        v.feed(b"\x01")          # 单字节
