@@ -28,7 +28,7 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 |---|---|
 | **Dual themes** | One-click sun/moon toggle in the title bar (preference remembered): teal→sky accent gradient (#14B8A6→#0EA5E9) with a cool neutral palette; overlay stays dark for readability over video |
 | Console | Source (mic / system audio), source language (auto / de / en / zh / ja / fr / es / ru) & target language, one-click start/stop with live status |
-| Key management | Paste & save key in-console (password field with show/hide, stored locally in settings.json; falls back to `DASHSCOPE_API_KEY` env var) |
+| Key management | Paste keys in the console (masked input, stored locally in settings.json; falls back to env vars). Integrated: `DASHSCOPE_API_KEY`; separated: per-engine key input on the engine card (same-vendor ASR/MT auto-sync), or env vars `SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` |
 | Caption cleanup | **🗑 Clear captions** button / `Ctrl+Alt+Backspace` clears current + history lines |
 | **Self-healing connection** | Auto-reconnects on unexpected disconnect (backoff 5s/15s/45s, 3 attempts); captions preserved; multi-screen aware |
 | Real-time interpretation | Speech → source transcript (ASR) → translation, streamed bilingually |

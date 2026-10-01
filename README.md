@@ -24,7 +24,7 @@
 |---|---|
 | **深/浅双主题** | 标题栏 ☀/🌙 一键切换（记忆偏好）：teal→sky 渐变强调色（#14B8A6→#0EA5E9，主按钮/滑杆/选中态）+ 冷调青灰中性色阶；全控件文字居中；字幕窗恒深色保证叠视频可读 |
 | 图形控制台 | 来源（麦克风/系统声音）、**源语言（自动识别/德/英/中/日/法/西/俄）**与目标语种点选即存，一键启停，状态实时显示 |
-| Key 管理 | 控制台内直接粘贴保存 key（密码框可显显隐，存本地 settings.json；留空回退环境变量 DASHSCOPE_API_KEY） |
+| Key 管理 | 控制台内直接粘贴保存 key（密码框可显显隐，存本地 settings.json；留空回退环境变量）。一体化：`DASHSCOPE_API_KEY`；分离式：引擎卡片内按引擎独立配 key（同厂商 ASR/翻译自动同步），或环境变量 `SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` |
 | 字幕清理 | **🗑 清空字幕**按钮 / 快捷键 Ctrl+Alt+Backspace，一键清除当前+历史字幕条 |
 | 实时同传 | 语音 → 原文（ASR）→ 译文，双语同屏流式刷新 |
 | **断线自愈** | 意外断开自动重连（5s/15s/45s 退避 ×3），重连期间字幕保留、可随时手动接管；多屏按所在屏钳制 |
@@ -62,7 +62,7 @@ pip install -r requirements.txt
 ## 3. 运行
 
 ### 方式一：exe（推荐）
-从 [Releases](../../releases) 下载 `QwenLiveTranslate.exe`（44MB 单文件，无需 Python 环境）。
+从 [Releases](../../releases) 下载 `QwenLiveTranslate.exe`（49MB 单文件，无需 Python 环境）。
 - 前提：系统环境变量 `DASHSCOPE_API_KEY` 已 setx（用户级即可）
 - 首次启动比脚本慢几秒（自解压）；settings.json 存在 exe 同目录
 - 换电脑：拷 exe + 在新机 setx key 即可
@@ -109,6 +109,7 @@ pyinstaller --noconfirm --clean --onefile --windowed --name QwenLiveTranslate --
 | 现象 | 处理 |
 |---|---|
 | 提示未设置 key | 确认已 `setx DASHSCOPE_API_KEY "sk-xxx"`（用户级，setx 后需**新开**终端/双击才生效；脚本方式也可当前会话 `$env:` 临时设） |
+| 分离式引擎 401/未授权 | 用引擎卡片「测试连接」定位是识别还是翻译侧：key 填在「引擎 Key」框（同厂商自动同步）或环境变量 `SILICONFLOW_API_KEY` / `ZHIPU_API_KEY`；跨厂商组合需分别配各自的 key |
 | 连接/会话超时 | 检查网络；确认 key 有效（百炼控制台可查）；限流 RPM 10，别高频重启 |
 | 无字幕 | 先看控制台 API Key 指示点是否为绿色、连接是否"就绪"；对着麦克风说话测试（麦克风模式），或确认电脑正在出声（系统声音模式）；仍无输出则点"停止"→"开始同传"重连一次 |
 | 采集失败 | 运行 `python capture.py --list-devices` 检查设备（蓝牙耳机需处于连接状态才会出现在 loopback 列表） |
