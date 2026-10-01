@@ -50,12 +50,30 @@ jobs:
       contents: write  # 创建 Release/上传资产必需（默认只读，v1.0.0 失败根因）
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史：CHANGELOG 提取需要 tag 间 diff
       - uses: actions/download-artifact@v4
         with:
           name: QwenLiveTranslate-win64
           path: dist
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          # 从 CHANGELOG.md 提取本 tag 版本段（## [X.Y.Z] 到下一个 ## 之间）
+          TAG="${GITHUB_REF_NAME#v}"
+          python3 - << 'EOF'
+          import os, re
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          src = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"## \[{re.escape(tag)}\][^\n]*\n(.*?)(?=\n## \[|\Z)", src, re.S)
+          body = m.group(1).strip() if m else "（CHANGELOG 未找到该版本段，详见 CHANGELOG.md）"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("body<<CHANGELOG_EOF\n" + body + "\nCHANGELOG_EOF\n")
+          EOF
       - name: Create GitHub Release with exe
         uses: softprops/action-gh-release@v2
         with:
           files: dist/QwenLiveTranslate.exe
+          body: ${{ steps.notes.outputs.body }}
+          append_body: true
           generate_release_notes: true
