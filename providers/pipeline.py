@@ -61,3 +61,10 @@ class SeparatedPipeline(LiveEngine):
     def close(self) -> None:
         self._worker.stop()
         self._asr.close()
+
+    def test_connection(self) -> tuple[bool, str]:
+        """两侧组件各自探活，汇总为一条消息。"""
+        ok1, msg1 = self._asr._client.test_connection()
+        ok2, msg2 = self._worker.translator.test_connection()
+        ok = ok1 and ok2
+        return ok, f"识别: {msg1} | 翻译: {msg2}"

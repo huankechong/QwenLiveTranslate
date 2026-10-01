@@ -22,11 +22,35 @@ class QwenEngine(LiveEngine):
                  on_error, voice="Tina", source_lang="auto",
                  api_key=None, on_disconnect=None):
         self.on_error = on_error  # 门面层错误回调（engine_io 上报通道）
+        self._cfg_api_key = api_key or ""  # test_connection 基类检查用
         self._client = LiveTranslateClient(
             target_lang, on_source, on_translation, on_status, on_error,
             voice=voice, source_lang=source_lang, api_key=api_key,
             on_disconnect=on_disconnect,
         )
+
+    def test_connection(self) -> tuple[bool, str]:
+        """DashScope /models 探活（有 key 才真测；env 变量也认）。"""
+        import json
+        import os
+        import urllib.error
+        import urllib.request
+
+        import config
+        key = self._cfg_api_key or os.environ.get(config.API_KEY_ENV, "")
+        if not key:
+            return False, "未配置 key"
+        req = urllib.request.Request(
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            headers={"Authorization": f"Bearer {key}"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                n = len(json.loads(resp.read().decode("utf-8")).get("data", []))
+                return True, f"DashScope 连接正常（{n} 个模型可用）"
+        except urllib.error.HTTPError as e:
+            return False, f"key 无效或未授权（HTTP {e.code}）"
+        except Exception as e:  # noqa: BLE001
+            return False, f"网络异常: {e}"
 
     # 事件对象直接透传（推流循环按 session_ready 节拍）
     @property

@@ -63,6 +63,18 @@ class LiveEngine:
     def close(self) -> None:  # pragma: no cover
         raise NotImplementedError
 
+    def test_connection(self) -> tuple[bool, str]:
+        """连通性测试（UI"测试连接"按钮专用；不建立会话）。
+
+        返回 (ok, 用户可读消息)。基类默认实现：无独立测试通道的
+        引擎只做 key 存在性检查（真连网由 connect 路径完成）。
+        """
+        import os
+        key = getattr(self, "_cfg_api_key", "") or ""
+        if key:
+            return True, "key 已配置（连接由启动验证）"
+        return False, "未配置 key"
+
     # —— 状态（子类以实例属性提供） ——
     connected: threading.Event
     session_ready: threading.Event

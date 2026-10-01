@@ -318,6 +318,18 @@ class Console(QWidget):
         row_mt.addWidget(self.cmb_mt, 1)
         ce.addLayout(row_mt)
 
+        # 引擎 Key（写入当前选中预设的配置档；分离式时显示）
+        row_ekey = QHBoxLayout()
+        row_ekey.setSpacing(8)
+        self.lab_ekey = _lbl("引擎 Key")
+        self.edit_ekey = QLineEdit()
+        self.edit_ekey.setEchoMode(QLineEdit.Password)
+        self.edit_ekey.setPlaceholderText("留空则沿用上方通用 API Key / 环境变量")
+        self.edit_ekey.editingFinished.connect(self._on_engine_key_edited)
+        row_ekey.addWidget(self.lab_ekey)
+        row_ekey.addWidget(self.edit_ekey, 1)
+        ce.addLayout(row_ekey)
+
         self.btn_engine_test = _btn("测试连接")
         self.btn_engine_test.clicked.connect(self._on_engine_test)
         ce.addWidget(self.btn_engine_test)
@@ -483,10 +495,58 @@ class Console(QWidget):
         self._sync_engine_visibility()
 
     def _sync_engine_visibility(self):
-        """分离式才显示 ASR/MT 行；一体化折叠。"""
+        """分离式才显示 ASR/MT/Key 行；一体化折叠。"""
         sep = self.cmb_engine_mode.currentData() == "separated"
-        for w in (self.lab_asr, self.cmb_asr, self.lab_mt, self.cmb_mt):
+        for w in (self.lab_asr, self.cmb_asr, self.lab_mt, self.cmb_mt,
+                  self.lab_ekey, self.edit_ekey):
             w.setVisible(sep)
+        if sep:
+            self._refresh_engine_key()
+
+    def _engine_key_profiles(self, pid: str | None = None) -> list:
+        """取/建设置里某引擎的配置档列表（P1.5b：引擎卡片独立 key）。"""
+        pid = pid or (self.cmb_asr.currentData() if self.cmb_asr.count() else "")
+        if not pid:
+            return []
+        cfgs = self.cfg.get("provider_configs") or {}
+        profs = cfgs.get(pid)
+        if not isinstance(profs, list) or not profs:
+            profs = [{}]
+            cfgs[pid] = profs
+            self.cfg["provider_configs"] = cfgs
+        return profs
+
+    def _refresh_engine_key(self):
+        """把 ASR 预设档里存的 key 回显到输入框（仅显示，不落盘）。"""
+        profs = self._engine_key_profiles()
+        self.edit_ekey.setText((profs[0].get("api_key") or "") if profs else "")
+
+    def _on_engine_key_edited(self):
+        """编辑完成：key 写入 ASR 预设档；MT 侧若同家（硅基流动）同步。"""
+        text = self.edit_ekey.text().strip()
+        asr_pid = self.cmb_asr.currentData() or ""
+        mt_pid = self.cmb_mt.currentData() or ""
+        # 取当前完整配置 → 改档 → 整体存（settings.save 白名单外键走 provider_configs）
+        data = st.load()
+        cfgs = data.get("provider_configs") or {}
+        def _set(pid):
+            profs = cfgs.get(pid)
+            if not isinstance(profs, list) or not profs:
+                profs = [{}]
+            import providers.registry as reg
+            spec = reg.get(pid) if pid else None
+            profs[0]["api_key"] = text
+            if spec:  # 默认 model/base_url 一并固化进档（换档即用）
+                for k, v in (spec.defaults or {}).items():
+                    profs[0].setdefault(k, v)
+            cfgs[pid] = profs
+        if asr_pid:
+            _set(asr_pid)
+        if mt_pid:
+            _set(mt_pid)
+        data["provider_configs"] = cfgs
+        st.update(**data)
+        self._restart_if_running()
 
     def _on_engine_mode(self):
         mode = self.cmb_engine_mode.currentData()
@@ -512,14 +572,7 @@ class Console(QWidget):
                 from providers import build_engine
                 cb = (lambda *a: None,) * 4 + (lambda *a: None,)
                 eng = build_engine(cfg, cb)
-                if hasattr(eng, "_asr"):  # 分离式
-                    ok1, msg1 = eng._asr._client.test_connection()
-                    ok2, msg2 = eng._worker.translator.test_connection()
-                    text = f"识别: {msg1} | 翻译: {msg2}"
-                    ok = ok1 and ok2
-                else:  # 一体化：key 存在性检查（真连网由启停路径完成）
-                    key = cfg.get("api_key") or os.environ.get(config.API_KEY_ENV, "")
-                    ok, text = (True, "key 已配置（连接由启动验证）") if key else (False, "未配置 key")
+                ok, text = eng.test_connection()  # 门面方法（P1.5a：不再摸内部属性）
             except Exception as e:  # noqa: BLE001
                 ok, text = False, f"测试失败: {e}"
             def _show():

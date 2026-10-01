@@ -458,3 +458,40 @@ class TestPhase1Components:
         qapp.processEvents()
         assert st.load().get("engine_mode") == "integrated"
         win.close()
+
+
+class TestPhase15:
+    def test_engine_key_editing_persists(self, qapp, tmp_path):
+        """P1.5b：引擎 Key 输入框写入选中预设的档（ASR+MT 同存）。"""
+        import settings as st
+        st.SETTINGS_PATH = tmp_path / "settings.json"
+        import console as C
+        win = C.Console()
+        win.show()
+        qapp.processEvents()
+        win.cmb_engine_mode.setCurrentIndex(1)
+        qapp.processEvents()
+        assert win.edit_ekey.isVisible()
+        win.edit_ekey.setText("sk-test-per-engine")
+        win._on_engine_key_edited()
+        pc = st.load().get("provider_configs") or {}
+        assert pc["siliconflow_sensevoice"][0]["api_key"] == "sk-test-per-engine"
+        assert pc["siliconflow_chat"][0]["api_key"] == "sk-test-per-engine"
+        assert pc["siliconflow_sensevoice"][0]["model"] == "FunAudioLLM/SenseVoiceSmall"
+        # 档 key 优先于顶层
+        from providers import _resolve
+        assert _resolve({"api_key": "sk-top"}, "siliconflow_sensevoice")["api_key"] \
+            == "sk-test-per-engine"
+        win.close()
+
+    def test_test_connection_facade(self):
+        """P1.5a：一体化引擎的 test_connection 真探活（假 key → 401）。"""
+        from providers import build_engine
+        eng = build_engine({"engine_mode": "integrated", "api_key": "sk-fake"},
+                           (lambda *a: None,) * 5)
+        ok, msg = eng.test_connection()
+        assert not ok  # 假 key 必须被服务端拒绝（真连网验证，非仅存在性检查）
+        eng2 = build_engine({"engine_mode": "integrated", "api_key": ""},
+                            (lambda *a: None,) * 5)
+        ok2, msg2 = eng2.test_connection()
+        assert not ok2 and "未配置" in msg2
