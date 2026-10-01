@@ -74,8 +74,8 @@ register(ProviderSpec(
 register(ProviderSpec(
     kind="mt",
     id="bigmodel_glm4flash",
-    display_name="智谱 GLM-4-Flash（免费）",
-    defaults={"model": "glm-4-flash",
+    display_name="智谱 GLM-4.7-Flash（免费）",
+    defaults={"model": "glm-4.7-flash",
               "base_url": "https://open.bigmodel.cn/api/paas/v4"},
     env_keys=("ZHIPU_API_KEY", "GLM_API_KEY"),
 ))
