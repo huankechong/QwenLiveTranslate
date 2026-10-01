@@ -1,6 +1,6 @@
 # QwenLiveTranslate 项目交接文档
 
-> 生成日期：2026-09-24（更新于同日 v1.0.5 发布后）｜ 版本：**v1.0.5（HEAD `6e8bda5`）** ｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
+> 生成日期：2026-09-24 ｜ 更新：2026-10-01（Phase 1 落地后，HEAD `d5bad12`）｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
 > 配套记忆：`.workbuddy/memory/2026-09-19~23.md`（每日开发日志，含全部决策上下文）
 
 ---
@@ -10,7 +10,7 @@
 **Windows 实时同传字幕工具**：采集麦克风或系统声音（loopback），推流到阿里云 DashScope 的 `qwen3.8-livetranslate-flash-realtime` WebSocket 端点做端到端"语音→翻译"，流式渲染到悬浮双语字幕条。PySide6 桌面应用 + PyInstaller 单文件 exe 发布。
 
 - 仓库：https://github.com/huankechong/QwenLiveTranslate（master 已推平，CI windows-latest + Python 3.13）
-- 状态：**v1.0.5 已发布**（6 个 Release），38 测试全绿，10 轮审计完成
+- 状态：v1.0.5 已发布（6 个 Release），**Phase 1 多引擎已并入 master（`d5bad12`，待发 v1.1.0）**，44 测试全绿，11 轮审计完成
 - 定位双目标：开源热度（对标 SakiRinn/LiveCaptions-Translator 3746★）+ 作者作品集
 
 ## 2. 技术栈与依赖
@@ -27,7 +27,7 @@
 
 **requirements.txt 与实际 import 逐一对齐（第 9 轮审计验证过），无冗余依赖。**
 
-## 3. 目录结构与模块职责（约 3700 行 Python）
+## 3. 目录结构与模块职责（约 4700 行 Python）
 
 ```
 qwen-livetranslate/
@@ -36,7 +36,17 @@ qwen-livetranslate/
 ├── overlay.py            # 悬浮字幕窗（最复杂：流式写入/裁剪/高度分配/动画/拖拽缩放/穿透）
 ├── controller.py         # SessionController 状态机（IDLE/CONNECTING/RUNNING/STOPPING/ERROR
 │                         #   + start_token 竞态防护 + 5/15/45s×3 指数退避重连引擎）
-├── providers/            # 多引擎抽象层（Phase 0 刚落地，仅 qwen 一个 provider）
+├── providers/            # 多引擎抽象层（Phase 1 落地：qwen 一体化 + 分离式组合）
+│   ├── base.py           #   LiveEngine 门面 + AudioSpec/EngineCaps
+│   ├── registry.py       #   显式注册表（5 预设：1 integrated + 1 ASR + 3 免费 MT）
+│   ├── engine_io.py      #   engine_push_loop 通用推流循环
+│   ├── qwen_livetranslate.py  # QwenEngine：一体化包装
+│   ├── vad.py            #   能量 VAD 分句器（自适应噪声底，8s 强切）
+│   ├── translation_worker.py  # 串行翻译 worker（退避重试/过期丢弃/失败不拆会话）
+│   ├── pipeline.py       #   SeparatedPipeline：ASR+MT 缝合成统一门面
+│   ├── asr/http_batch.py #   OpenAI 兼容批量 ASR（/audio/transcriptions）
+│   └── mt/               #   openai_compat.py（通用 Chat 翻译）+ errors.py（错误分类）
+
 │   ├── base.py           #   LiveEngine 门面 Protocol + AudioSpec/EngineCaps
 │   ├── registry.py       #   显式注册表（ProviderSpec，拒绝反射发现）
 │   ├── engine_io.py      #   engine_push_loop 通用推流循环
@@ -50,7 +60,7 @@ qwen-livetranslate/
 │                         #   + resolve_provider_cfg 三级回退：档→旧顶层key→env）
 ├── config.py             # 静态常量（__version__/端点/热键）
 ├── theme.py              # 深浅主题 token + QSS 生成（exe 必须带，缺了启动即崩）
-├── tests/                # 38 测试（pytest，offscreen 可跑，无需音频设备/key）
+├── tests/                # 44 测试（pytest，offscreen 可跑，无需音频设备/key）
 │   ├── conftest.py       #   fakes fixture：patch 的是 CTRL.build_engine 工厂！
 │   ├── test_controller.py    # 状态机/重连/竞态
 │   ├── test_history.py       # 存储/导出/原子写/字典清理
@@ -116,14 +126,15 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 4. 稳定性：10 轮审计累计修 30+ bug（退出丢末句/跨会话错配/原子写盘/内存泄漏/裁剪粒度等）
 5. **v1.0.4/v1.0.5 字幕布局双修复**：折行长句遮顶行（显示高度裁剪）+ 原文只剩一两句（三层根因：relayout 覆盖/比例削穿保底/窗高物理不足→bare_min 护栏）
 6. providers 抽象层（Phase 0，零行为变化，qwen 无缝迁入）
-7. 开源基建：双语 README/CI/Issue 模板/社区规范/隐私声明
+7. **Phase 1 多引擎（master 在线，待发 v1.1.0）**：硅基流动分离式管线（VAD 分句 + SenseVoice 批量 ASR + 3 免费翻译引擎任选：硅基 Qwen2.5 / 混元 MT / GLM-4-Flash）；控制台引擎卡片（模式切换/下拉选配/测试连接/运行中热切换）；真机 E2E 调通
+8. 开源基建：双语 README/CI/Issue 模板/社区规范/隐私声明
 
 ## 8. 进行中 / 待办（按优先级）
 
 | 优先级 | 任务 | 状态 |
 |--------|------|------|
-| 🟠 P1 | Phase 1 多引擎垂直切片：硅基流动（SenseVoice ASR + Chat 翻译，用户已有 key）→ v1.1.0。方案详见记忆 2026-09-23 | 设计完成待开工 |
-| 🟠 P1' | 翻译注册表一次挂 3 免费预设：siliconflow_chat / bigmodel_glm4flash / hunyuan_mt（腾讯混元翻译，免费） | 同上 |
+| 🔴 **立即** | **发 v1.1.0**：CHANGELOG 1.1.0 段 + README 引擎卡片说明 + config 版本号 1.0.5→1.1.0 + 真机 UI 手动走查（控制台切"分离式"跑一轮）→ 审批制发版 | 代码就绪（`d5bad12`） |
+| 🟡 P1.5 | 引擎卡片按引擎独立 key 输入（现在靠通用 API Key 框回退）；LiveEngine 加 test_connection() 门面方法（UI 现摸 `_asr._client` 内部属性） | 建议随 v1.1.x |
 | 🟡 P2 | 生词本 + Anki 导出（用户刚需+传播故事） | 未开工 |
 | 🟡 P2' | OBS Browser Source 网页字幕条（传播引爆点） | 未开工 |
 | ⚪ P3 | winget 发布 / 延迟统计图 / GPT-Realtime-Translate / 豆包同传 / 本地 whisper | 远期 |
@@ -133,11 +144,12 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 | 级别 | 项 | 说明 |
 |------|---|------|
 | 🟡 | capture.stop() 非线程安全 | `_stream=None` 无锁，靠 PyAudio 异常+推流侧兜底"巧合性安全"；防御重构风险>收益，第 8 轮审计决定注记不修 |
-| 🟡 | M1 遗留：`_relayout_browsers` 与 `apply_cfg` 的双重写权 | v1.0.4 后 relayout 已去覆盖化（只处理拖大），但两个写点并存仍是复杂度来源——Phase 1 动布局时建议合并为单一分配函数 |
+| 🟡 | M1 遗留：`_relayout_browsers` 与 `apply_cfg` 的双重写权 | 已去覆盖化（只处理拖大），两个写点并存仍是复杂度来源——下次动 overlay 布局时合并为单一分配函数 |
 | 🟡 | 测试盲区 | `engine_io` 错误路径已补测，但 `resizeEvent`/拖拽缩放（WM_NCHITTEST 路径）无自动化——改 overlay 布局必须真机验证 |
 | 🟢 | ~~e2e_*.txt~~ | 已删（第 11 轮审计 L4） |
 | 🟢 | sample_16k.wav 系测试资产 | 端到端验证脚本曾用，现在测试已不引用——保留无害 |
 | 🟢 | ~~e2e 空日志~~ | 已删（R11-L4） |
+| 🟡 | 硅基流动 ASR 尾延迟 | 5s 段正常 8-14s、偶发 30s+（服务端问题，绕代理直连复测确认）；已用 8s 分段 + 三次退避 + 30s 超时兜住，但免费额度下体验上限如此 | 
 | 🟢 | `__pycache__` 陷阱 | **offscreen 测试改代码后必须 `rm -rf __pycache__` + `python -B`**，否则跑旧字节码——9/23 排障被坑 5 轮 |
 
 ## 10. 潜在风险与红线
@@ -166,17 +178,17 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 第 1 步：读本交接文档 + 记忆文件（9/19~9/23 日志）
 第 2 步：跑 pytest tests/ -q 确认 38 绿（基线健康检查）
 第 3 步：真机启动 dist exe 复现一遍用户场景（h=256 + display_sentences=10）
-第 4 步：按 P1 路线开 Phase 1（先读记忆里的完整 Phase 0/1 方案）
+第 4 步：发 v1.1.0（三件套 + 真机走查），或直接开 P2（Phase 1 方案/排障实录见记忆 2026-09-27）
 第 5 步：每次发版走既定节奏：测试→打包→真机验版本号→暂存→用户批三连→CI→Release
 ```
 
 ### 快速验证清单（接手后 10 分钟自检）
 
 ```bash
-git log --oneline -3          # 应见 "Release v1.0.5" 在顶（6e8bda5）
+git log --oneline -3          # 应见 "Fix P1 self-review findings" 在顶（d5bad12）
 git status --short            # 干净（无未提交/未跟踪文件）
-pytest tests/ -q              # 38 passed
-python -c "import config; print(config.__version__)"   # 1.0.5
+pytest tests/ -q              # 44 passed
+python -c "import config; print(config.__version__)"   # 1.0.5（v1.1.0 未发）
 ```
 
 ## 12. 外部服务依赖
@@ -185,6 +197,6 @@ python -c "import config; print(config.__version__)"   # 1.0.5
 |------|------|---------|
 | 阿里云 DashScope | qwen3.8 同传 WS | 唯一推理引擎；`wss://dashscope.aliyuncs.com/api-ws/v1/realtime` |
 | GitHub Actions | CI + Release 自动构建 | windows-latest + Py 3.13，打 tag 触发 release job |
-| （计划）硅基流动/智谱/DeepL 等 | Phase 1+ 多引擎 | OpenAI 兼容协议，openai_compat 一个类覆盖 |
+| 硅基流动（已接入）/智谱 GLM-4-Flash（已注册预设） | 分离式 ASR+MT | OpenAI 兼容协议，openai_compat 一个类覆盖；key 三级回退（档→顶层→env） |
 
 **无其他外部服务**。历史数据/设置全部本地。
