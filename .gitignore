@@ -35,3 +35,4 @@ _*/
 # 图标生成脚本的临时产物（app.ico 是交付物，保留）
 icon_preview*.png
 icon_master*.png
+vocabulary.db

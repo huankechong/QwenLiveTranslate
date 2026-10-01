@@ -569,3 +569,52 @@ class TestR12Fixes:
         v = VadSegmenter(lambda: None, lambda p: None)
         v.feed(b"\x01\x02\x03")  # 1.5 样本
         v.feed(b"\x01")          # 单字节
+
+
+class TestVocabularyP2:
+    def test_extract_and_store(self, tmp_path):
+        """P2：分词/停用词/去重 + 新词入库 + 重复计次。"""
+        import vocabulary as V
+        s = V.VocabStore(tmp_path / "v.db")
+        c = V.VocabStore.extract_candidates(
+            "The quick brown fox jumps really quickly!")
+        assert "quick" in c and "the" not in c and "really" not in c
+        assert len(set(c)) == len(c)
+        new1 = s.record_sentence("The algorithm sorts the array", "算法排序")
+        new2 = s.record_sentence("The algorithm runs fast", "算法运行")
+        assert "algorithm" in new1 and "algorithm" not in new2
+        hits = {r["word"]: r["hits"] for r in s.top()}
+        assert hits["algorithm"] == 2
+        assert s.count() >= 4
+        s.close()
+
+    def test_anki_tsv_export(self, tmp_path):
+        """P2：TSV 三列（word/context/translation），Tab 分隔。"""
+        import vocabulary as V
+        s = V.VocabStore(tmp_path / "v.db")
+        s.record_sentence("binary search tree", "二叉查找树")
+        s.record_sentence("recursion depth", "递归深度")
+        out = tmp_path / "anki.txt"
+        n = s.export_anki_tsv(out)
+        lines = out.read_text(encoding="utf-8").strip().splitlines()
+        assert n == len(lines) >= 3
+        assert all(ln.count("\t") == 2 for ln in lines)
+        s.close()
+
+    def test_vocab_view_ui(self, qapp, tmp_path, monkeypatch):
+        """P2：生词窗浏览/搜索（经 store 单例）。"""
+        import vocabulary as V
+        s = V.VocabStore(tmp_path / "v.db")
+        s.record_sentence("pointer arithmetic", "指针运算")
+        monkeypatch.setattr(V, "_STORE", s)
+        from vocab_view import VocabView
+        w = VocabView()
+        w.show()
+        qapp.processEvents()
+        assert w.table.rowCount() >= 2
+        w.edit_search.setText("pointer")
+        w._do_search()
+        qapp.processEvents()
+        assert w.table.rowCount() == 1
+        w.close()
+        s.close()

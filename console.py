@@ -270,9 +270,13 @@ class Console(QWidget):
         self.btn_hist = _btn("历史")
         self.btn_hist.setToolTip("查看/导出翻译历史（SQLite 落库）")
         self.btn_hist.clicked.connect(self._open_history)
+        self.btn_vocab = _btn("生词")
+        self.btn_vocab.setToolTip("生词本：句终自动采集，支持 Anki 导出")
+        self.btn_vocab.clicked.connect(self._open_vocab)
         row_ctl.addWidget(self.btn_start, 3)
         row_ctl.addWidget(self.btn_clear, 1)
         row_ctl.addWidget(self.btn_hist, 1)
+        row_ctl.addWidget(self.btn_vocab, 1)
         cl.addLayout(row_ctl)
 
         # ---- 状态（领导要求整行不显示：隐藏控件，保留引用防十余处 setText 报错）----
@@ -740,6 +744,14 @@ class Console(QWidget):
                 translation=translation_text,
                 latency_ms=self._latency_ms,
             )
+            # 生词本采集（P2：句终自动入生词库，失败不影响主流程）
+            try:
+                import vocabulary as vocab
+                vocab.store().record_sentence(
+                    src.get("text", ""), translation_text,
+                    source=self.cfg.get("source", ""))
+            except Exception:  # noqa: BLE001
+                pass
         except Exception:  # noqa: BLE001
             pass
 
@@ -829,6 +841,15 @@ class Console(QWidget):
         self.lbl_state.setText("字幕已清空")
 
     # ---------- 历史窗口 ----------
+    def _open_vocab(self):
+        """打开生词本窗口（浏览/搜索/删除/Anki 导出）。"""
+        try:
+            from vocab_view import VocabView
+            self._vocab_win = VocabView(self)
+            self._vocab_win.show()
+        except Exception as e:  # noqa: BLE001
+            self.lbl_err.setText(f"生词本打开失败: {e}")
+
     def _open_history(self):
         try:
             import history_view
