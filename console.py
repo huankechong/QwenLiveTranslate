@@ -842,10 +842,12 @@ class Console(QWidget):
 
     # ---------- 历史窗口 ----------
     def _open_vocab(self):
-        """打开生词本窗口（浏览/搜索/删除/Anki 导出）。"""
+        """打开生词本窗口（浏览/搜索/删除/Anki 导出）。
+
+        独立顶级窗口（无 parent）——带 parent 会嵌入主窗无法关闭。"""
         try:
             from vocab_view import VocabView
-            self._vocab_win = VocabView(self)
+            self._vocab_win = VocabView()
             self._vocab_win.show()
         except Exception as e:  # noqa: BLE001
             self.lbl_err.setText(f"生词本打开失败: {e}")

@@ -23,9 +23,11 @@ def _vocab_dir() -> Path:
 
 
 class VocabView(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()  # 无 parent：独立顶级窗口（修复：带 parent 会被渲染成
+        # 嵌入主窗的子控件——没有标题栏/关闭按钮，用户无法关闭）
         self.setWindowTitle("生词本 · Qwen LiveTranslate")
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)  # 与历史窗同款置顶
         self.resize(720, 480)
         tk = theme.get("dark")
         self.setStyleSheet(theme.history_qss(tk))  # 复用历史窗表格样式
