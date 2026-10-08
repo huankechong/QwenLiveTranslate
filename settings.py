@@ -85,6 +85,8 @@ DEFAULTS = {
     "asr_provider": "",            # separated 模式：ASR 引擎 id
     "mt_provider": "",             # separated 模式：翻译引擎 id
     "provider_configs": {},        # 每引擎多套配置档 {engine_id: [profile,...]}
+    # ---- 生词本（P2+） ----
+    "vocab_freq_cutoff": 5000,      # B 方案高频过滤档位：词频表前 N 不收（0=关闭）
     "provider_indices": {},        # 每引擎当前用第几档 {engine_id: int}
 }
 

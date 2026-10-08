@@ -573,31 +573,41 @@ class TestR12Fixes:
 
 class TestVocabularyP2:
     def test_extract_and_store(self, tmp_path):
-        """P2：分词/停用词/去重 + 新词入库 + 重复计次。"""
+        """P2：分词/停用词/去重 + 新词入库 + 重复计次（A+B 过滤下用真生词）。"""
+        import settings as st
+        st.SETTINGS_PATH = tmp_path / "settings.json"
+        st.update(vocab_freq_cutoff=5000)
         import vocabulary as V
+        V._FREQ_LIST = None
         s = V.VocabStore(tmp_path / "v.db")
         c = V.VocabStore.extract_candidates(
-            "The quick brown fox jumps really quickly!")
-        assert "quick" in c and "the" not in c and "really" not in c
+            "The juxtaposed archetypes coalesce misleadingly!")
+        assert "juxtaposed" in c and "the" not in c
         assert len(set(c)) == len(c)
-        new1 = s.record_sentence("The algorithm sorts the array", "算法排序")
-        new2 = s.record_sentence("The algorithm runs fast", "算法运行")
-        assert "algorithm" in new1 and "algorithm" not in new2
+        new1 = s.record_sentence("The juxtaposed archetypes sort", "并置")
+        new2 = s.record_sentence("The juxtaposed archetypes persistently", "再跑")
+        assert "juxtaposed" in new1 and "juxtaposed" not in new2
         hits = {r["word"]: r["hits"] for r in s.top()}
-        assert hits["algorithm"] == 2
-        assert s.count() >= 4
+        assert hits["juxtaposed"] == 2
+        assert s.count() >= 3  # juxtaposed/archetypes（句1）+ persistently（句2）
         s.close()
 
     def test_anki_tsv_export(self, tmp_path):
-        """P2：TSV 三列（word/context/translation），Tab 分隔。"""
+        """P2：TSV 三列（word/context/translation），Tab 分隔（直插库隔离过滤）。"""
+        import settings as st
+        st.SETTINGS_PATH = tmp_path / "settings.json"
         import vocabulary as V
+        V._FREQ_LIST = None
         s = V.VocabStore(tmp_path / "v.db")
-        s.record_sentence("binary search tree", "二叉查找树")
-        s.record_sentence("recursion depth", "递归深度")
+        for w in ("binary", "recursion"):
+            s._conn.execute(
+                "INSERT OR IGNORE INTO vocabulary(word,context,translation,first_ts)"
+                " VALUES(?,?,?,?)", (w, w + " context", "译", 1.0))
+        s._conn.commit()
         out = tmp_path / "anki.txt"
         n = s.export_anki_tsv(out)
         lines = out.read_text(encoding="utf-8").strip().splitlines()
-        assert n == len(lines) >= 3
+        assert n == len(lines) == 2
         assert all(ln.count("\t") == 2 for ln in lines)
         s.close()
 
@@ -617,4 +627,36 @@ class TestVocabularyP2:
         qapp.processEvents()
         assert w.table.rowCount() == 1
         w.close()
+        s.close()
+
+
+class TestVocabNoiseFilter:
+    def test_three_layer_filter(self, tmp_path):
+        """A+B：停用词/碎词/高频词三层过滤 + 档位可调 + 存量清洗。"""
+        import settings as st
+        st.SETTINGS_PATH = tmp_path / "settings.json"
+        st.update(vocab_freq_cutoff=5000)
+        import vocabulary as V
+        V._FREQ_LIST = None  # 重置词表缓存
+        c = V.VocabStore.extract_candidates(
+            "The substitution architect won't bargain, don't you think?")
+        assert "substitution" in c and "architect" in c
+        assert not {"the", "won", "you", "think", "don"} & set(c)
+        # 档位关闭 B
+        st.update(vocab_freq_cutoff=0)
+        V._FREQ_LIST = None
+        c2 = V.VocabStore.extract_candidates("the substitution thinks deeply")
+        assert "thinks" in c2 and "deeply" in c2
+        # 存量清洗
+        st.update(vocab_freq_cutoff=5000)
+        V._FREQ_LIST = None
+        s = V.VocabStore(tmp_path / "v.db")
+        for w in ["company", "one", "good", "substitution", "architect", "don"]:
+            s._conn.execute(
+                "INSERT OR IGNORE INTO vocabulary(word,context,first_ts)"
+                " VALUES(?,?,?)", (w, "ctx", 1.0))
+        s._conn.commit()
+        removed = s.purge_common()
+        remain = {r["word"] for r in s.recent()}
+        assert remain == {"substitution", "architect"} and removed == 4
         s.close()

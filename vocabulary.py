@@ -39,6 +39,44 @@ wanted see saw look looked say said tell told ask asked
 
 _WORD_RE = re.compile(r"[A-Za-z]{3,}")
 
+# 缩写碎词（don't → don + t 的撇号切断产物，直接过滤）
+_CONTRACTION_FRAGS = frozenset(
+    "don doesn didn isn aren wasn weren won wouldn couldn shouldn hasn "
+    "haven hadn weren they you we ll ve re d s t m".split())
+
+
+def _load_freq_table() -> frozenset:
+    """B 方案：内置通用词频表（google-10000-english 公开数据集前 N 词）。
+
+    高频词=大概率已会 → 不收。档位由 settings.vocab_freq_cutoff 控制
+    （默认 5000；调低收更多，调高收更少；0=关闭 B 过滤）。懒加载一次。
+    """
+    global _FREQ_SET, _FREQ_LIST
+    if _FREQ_LIST is None:
+        try:
+            path = Path(__file__).parent / "freq_words.txt"
+            _FREQ_LIST = [w.strip() for w in
+                          open(path, encoding="utf-8") if w.strip()]
+        except Exception:  # noqa: BLE001 — 词表缺失时退化为仅 A 方案
+            _FREQ_LIST = []
+    cutoff = _freq_cutoff()
+    if cutoff <= 0:
+        return frozenset()
+    return frozenset(w for w in _FREQ_LIST[:cutoff] if len(w) >= 3)
+
+
+_FREQ_LIST: list[str] | None = None
+_FREQ_SET: frozenset | None = None
+
+
+def _freq_cutoff() -> int:
+    """读取用户设置的高频档位（默认 5000）。"""
+    try:
+        import settings as st
+        return int(st.load().get("vocab_freq_cutoff", 5000))
+    except Exception:  # noqa: BLE001
+        return 5000
+
 
 def db_path() -> Path:
     """生词库路径：与 settings/history 同目录策略。"""
@@ -71,12 +109,18 @@ class VocabStore:
     # ---------- 采集 ----------
     @staticmethod
     def extract_candidates(sentence: str) -> list[str]:
-        """从一句原文提取生词候选（≥3 字母词、去停用词、小写去重）。"""
+        """从一句原文提取生词候选。
+
+        三层过滤：≥3 字母词 + 停用词/碎词（A）+ 通用高频词（B，档位可调）。
+        """
         words = [w.lower() for w in _WORD_RE.findall(sentence or "")]
+        freq = _load_freq_table()
         seen: set[str] = set()
         out: list[str] = []
         for w in words:
-            if w in _STOPWORDS or w in seen:
+            if w in _STOPWORDS or w in _CONTRACTION_FRAGS or w in freq:
+                continue
+            if w in seen:
                 continue
             seen.add(w)
             out.append(w)
@@ -144,6 +188,26 @@ class VocabStore:
         with self._lock:
             self._conn.execute("DELETE FROM vocabulary WHERE id=?", (word_id,))
             self._conn.commit()
+
+    # ---------- 维护 ----------
+    def purge_common(self) -> int:
+        """按当前档位清洗库内已积累的高频噪音词（返回移除数）。
+
+        升级过滤规则后对存量数据的一次性回溯清理。"""
+        freq = _load_freq_table()
+        if not freq:
+            return 0
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT id, word FROM vocabulary").fetchall()
+            doomed = [r[0] for r in cur
+                      if r[1] in _STOPWORDS or r[1] in _CONTRACTION_FRAGS
+                      or r[1] in freq]
+            for wid in doomed:
+                self._conn.execute(
+                    "DELETE FROM vocabulary WHERE id=?", (wid,))
+            self._conn.commit()
+        return len(doomed)
 
     def close(self) -> None:
         with self._lock:

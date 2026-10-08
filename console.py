@@ -579,25 +579,46 @@ class Console(QWidget):
         self._restart_if_running()
 
     def _on_engine_test(self):
-        """后台线程测试当前引擎连通性（结果写错误标签，不打断 UI）。"""
+        """后台线程测试当前引擎连通性（结果经 Qt Signal 回主线程显示）。
+
+        R15 修复：原实现在线程里调 QTimer.singleShot——Qt 禁止跨线程
+        操作 timer（静默丢弃回调）→ 用户点按钮"无反应"。Signal 的
+        emit 跨线程安全，槽在主线程执行。"""
         cfg = dict(self.cfg)
+        self.btn_engine_test.setEnabled(False)
+        self.btn_engine_test.setText("测试中…")
+
+        class _Relay(QObject):
+            done = Signal(bool, str)
+
+        relay = _Relay()
+        relay.done.connect(self._show_engine_test_result)
 
         def _test():
             try:
                 from providers import build_engine
                 cb = (lambda *a: None,) * 4 + (lambda *a: None,)
                 eng = build_engine(cfg, cb)
-                ok, text = eng.test_connection()  # 门面方法（P1.5a：不再摸内部属性）
+                ok, text = eng.test_connection()  # 门面方法（P1.5a）
             except Exception as e:  # noqa: BLE001
                 ok, text = False, f"测试失败: {e}"
-            def _show():
-                self.lbl_err.setText(("✅ " if ok else "⚠️ ") + text)
-                self.lbl_err.setStyleSheet(
-                    f"color:{'#22a06b' if ok else '#e5484d'};"
-                    " font-size:11px; font-weight:600;")
-            QTimer.singleShot(0, _show)
+            relay.done.emit(ok, text)  # Signal emit 跨线程安全
 
         threading.Thread(target=_test, daemon=True).start()
+
+    def _show_engine_test_result(self, ok: bool, text: str):
+        """测试结果落 UI（主线程槽函数）。"""
+        self.btn_engine_test.setEnabled(True)
+        self.btn_engine_test.setText("测试连接")
+        self.lbl_err.setText(("✅ " if ok else "⚠️ ") + text)
+        self.lbl_err.setStyleSheet(
+            f"color:{'#22a06b' if ok else '#e5484d'};"
+            " font-size:11px; font-weight:600;")
+        # 用户反馈：点击测试连接后 key 框被"选中"——链路是 editingFinished
+        # → refresh_key_status 的 setText 在 Password 框上重置了光标/选区。
+        # 测试流程结束即主动清除选区并归还焦点给按钮，保持视觉干净。
+        self.edit_key.deselect()
+        self.btn_engine_test.clearFocus()
 
     def refresh_key_status(self):
         """key 状态灯：settings 里的 key 优先，否则看环境变量。"""
@@ -611,8 +632,10 @@ class Console(QWidget):
             self.lbl_key.setText("● 未配置 Key")
         self.lbl_key.setStyleSheet(
             f"color:{self._key_color()}; font-size:11px; font-weight:600;")
-        # key 输入框回显（脱敏显示）
-        self.edit_key.setText(saved)
+        # key 输入框回显（脱敏显示）——仅当值真变化时 setText：
+        # 无差别重置会让 Password 框光标/选区跳变（用户反馈的"被选中"观感）
+        if self.edit_key.text() != saved:
+            self.edit_key.setText(saved)
         self.lbl_key_hint.setText(
             "保存后立即生效；留空则回退环境变量。key 仅存本机 settings.json。"
         )

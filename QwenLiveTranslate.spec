@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.py', '.'), ('theme.py', '.'), ('app.ico', '.')],
+    datas=[('config.py', '.'), ('theme.py', '.'), ('app.ico', '.'), ('freq_words.txt', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
