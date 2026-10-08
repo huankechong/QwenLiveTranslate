@@ -844,9 +844,16 @@ class Console(QWidget):
     def _open_vocab(self):
         """打开生词本窗口（浏览/搜索/删除/Anki 导出）。
 
-        独立顶级窗口（无 parent）——带 parent 会嵌入主窗无法关闭。"""
+        独立顶级窗口（无 parent）——带 parent 会嵌入主窗无法关闭。
+        单例：已开则聚焦，避免多窗并存（R14-L1）。"""
         try:
+            if getattr(self, "_vocab_win", None) is not None \
+                    and self._vocab_win.isVisible():
+                self._vocab_win.raise_()
+                self._vocab_win.activateWindow()
+                return
             from vocab_view import VocabView
+            # 旧实例已关但引用还在：先清再建
             self._vocab_win = VocabView()
             self._vocab_win.show()
         except Exception as e:  # noqa: BLE001
@@ -964,6 +971,17 @@ class Console(QWidget):
             pass
         try:
             history.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+        # 生词窗同样处理（R14-M1：对照历史窗模式，否则孤儿窗口+连接不关）
+        try:
+            if getattr(self, "_vocab_win", None) is not None:
+                self._vocab_win.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            import vocabulary
+            vocabulary.shutdown()
         except Exception:  # noqa: BLE001
             pass
         try:

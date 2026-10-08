@@ -184,6 +184,18 @@ _STORE: VocabStore | None = None
 _STORE_LOCK = threading.Lock()
 
 
+def shutdown():
+    """应用退出时关闭连接（console.closeEvent 调用；与 history.shutdown 对称）。"""
+    global _STORE
+    with _STORE_LOCK:
+        if _STORE is not None:
+            try:
+                _STORE.close()
+            except Exception:  # noqa: BLE001
+                pass
+            _STORE = None
+
+
 def store() -> VocabStore:
     global _STORE
     with _STORE_LOCK:
