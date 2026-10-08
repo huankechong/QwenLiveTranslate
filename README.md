@@ -33,6 +33,7 @@
 | 字幕增强 | 字号 0.7~2.0x、背景不透明度、最大行数实时滑杆调节（**启动即显数值**）；显示原文/延迟开关（宽度直接拖字幕条边缘） |
 | 保留句数上限 | **display_sentences 滑杆（1~10）**：整段化后原文/译文各自保留的句数（超出删最旧整句）；句子**连成整段**——CJK 无缝、拉丁句间智能空格 |
 | 多引擎 | 控制台"翻译引擎"卡片：**Qwen 一体化**（默认）或**分离式组合**（硅基流动 SenseVoice 识别 + 3 个免费翻译引擎任选：Qwen2.5 / 混元 MT / GLM-4.7-Flash）；一键测试连接、运行中热切换 |
+| 生词本 | 句终自动采集生词（智能去噪：词频前 5000 已会词不收，实测去噪 75%）；高频排序即复习优先级；**一键导出 Anki TSV**（word + 出处句 + 释义） |
 | 翻译历史 | **🕘 历史**按钮打开历史窗：SQLite 落库每句终稿（时间/语种/原文/译文/延迟），双击行复制译文，一键导出 Excel(.xlsx)（真日期单元格+样式列宽，Excel 打开不乱）/ CSV（UTF-8-BOM），可清空 |
 | 窗口位置记忆 | 字幕窗拖到哪，下次启动在哪（松手即存 settings.json；含屏幕边界校验） |
 | 显示延迟 | **⚡ 显示延迟**开关：字幕窗左上角实时显示每句翻译延迟（speech_started → 译文终稿，毫秒） |
@@ -62,7 +63,7 @@ pip install -r requirements.txt
 ## 3. 运行
 
 ### 方式一：exe（推荐）
-从 [Releases](../../releases) 下载 `QwenLiveTranslate.exe`（49MB 单文件，无需 Python 环境）。
+从 [Releases](../../releases) 下载 `QwenLiveTranslate.exe`（64MB 单文件，无需 Python 环境）。
 - 前提：系统环境变量 `DASHSCOPE_API_KEY` 已 setx（用户级即可）
 - 首次启动比脚本慢几秒（自解压）；settings.json 存在 exe 同目录
 - 换电脑：拷 exe + 在新机 setx key 即可

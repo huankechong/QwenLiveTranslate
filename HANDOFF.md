@@ -1,6 +1,6 @@
 # QwenLiveTranslate 项目交接文档
 
-> 生成日期：2026-09-24 ｜ 更新：2026-10-01（Phase 1 落地后，HEAD `d5bad12`）｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
+> 生成日期：2026-09-24 ｜ 更新：2026-10-08（P2 生词本落地后，HEAD `67b4b2f`）｜ 目标读者：接手本项目的下一个 AI Agent 或人类开发者
 > 配套记忆：`.workbuddy/memory/2026-09-19~23.md`（每日开发日志，含全部决策上下文）
 
 ---
@@ -10,7 +10,7 @@
 **Windows 实时同传字幕工具**：采集麦克风或系统声音（loopback），推流到阿里云 DashScope 的 `qwen3.8-livetranslate-flash-realtime` WebSocket 端点做端到端"语音→翻译"，流式渲染到悬浮双语字幕条。PySide6 桌面应用 + PyInstaller 单文件 exe 发布。
 
 - 仓库：https://github.com/huankechong/QwenLiveTranslate（master 已推平，CI windows-latest + Python 3.13）
-- 状态：v1.0.5 已发布（6 个 Release），**Phase 1 多引擎已并入 master（`d5bad12`，待发 v1.1.0）**，44 测试全绿，11 轮审计完成
+- 状态：v1.1.1 已发布（8 个 Release），**P2 生词本+全套实测修复已并入 master（`67b4b2f`，v1.2.0 发布中）**，53 测试全绿，15 轮审计完成
 - 定位双目标：开源热度（对标 SakiRinn/LiveCaptions-Translator 3746★）+ 作者作品集
 
 ## 2. 技术栈与依赖
@@ -60,7 +60,10 @@ qwen-livetranslate/
 │                         #   + resolve_provider_cfg 三级回退：档→旧顶层key→env）
 ├── config.py             # 静态常量（__version__/端点/热键）
 ├── theme.py              # 深浅主题 token + QSS 生成（exe 必须带，缺了启动即崩）
-├── tests/                # 44 测试（pytest，offscreen 可跑，无需音频设备/key）
+├── vocabulary.py         # 生词本存储（A+B 噪音过滤/高频计次/Anki TSV 导出）
+├── vocab_view.py         # 生词本浏览窗（最近/高频/搜索/删除/导出）
+├── freq_words.txt        # B 层词频表（google-10000 公开数据集，9894 词）
+├── tests/                # 53 测试（pytest，offscreen 可跑，无需音频设备/key）
 │   ├── conftest.py       #   fakes fixture：patch 的是 CTRL.build_engine 工厂！
 │   ├── test_controller.py    # 状态机/重连/竞态
 │   ├── test_history.py       # 存储/导出/原子写/字典清理
@@ -133,9 +136,8 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 
 | 优先级 | 任务 | 状态 |
 |--------|------|------|
-| 🔴 **立即** | **发 v1.1.0**：CHANGELOG 1.1.0 段 + README 引擎卡片说明 + config 版本号 1.0.5→1.1.0 + 真机 UI 手动走查（控制台切"分离式"跑一轮）→ 审批制发版 | 代码就绪（`d5bad12`） |
+| 🔴 **立即** | 发 v1.2.0（本提交）后：真机再走查一轮生词本课堂体验 | 进行中 |
 | 🟡 P1.5 | 引擎卡片按引擎独立 key 输入（现在靠通用 API Key 框回退）；LiveEngine 加 test_connection() 门面方法（UI 现摸 `_asr._client` 内部属性） | 建议随 v1.1.x |
-| 🟡 P2 | 生词本 + Anki 导出（用户刚需+传播故事） | 未开工 |
 | 🟡 P2' | OBS Browser Source 网页字幕条（传播引爆点） | 未开工 |
 | ⚪ P3 | winget 发布 / 延迟统计图 / GPT-Realtime-Translate / 豆包同传 / 本地 whisper | 远期 |
 
@@ -186,10 +188,10 @@ dist\QwenLiveTranslate.exe   # 49MB 单文件
 ### 快速验证清单（接手后 10 分钟自检）
 
 ```bash
-git log --oneline -3          # 应见 "Fix P1 self-review findings" 在顶（d5bad12）
+git log --oneline -3          # 应见 "Release v1.2.0" 在顶
 git status --short            # 干净（无未提交/未跟踪文件）
-pytest tests/ -q              # 44 passed
-python -c "import config; print(config.__version__)"   # 1.0.5（v1.1.0 未发）
+pytest tests/ -q              # 53 passed
+python -c "import config; print(config.__version__)"   # 1.2.0
 ```
 
 ## 12. 外部服务依赖

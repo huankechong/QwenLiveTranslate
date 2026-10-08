@@ -37,6 +37,7 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 | Appearance tuning | Font scale 0.7~2.0× / opacity / line-count sliders live-adjusting (values shown instantly); show-original & latency toggles |
 | Caption trimming | `display_sentences` slider (1–10): sentences merged into paragraphs (CJK seamless, smart Latin spacing), oldest trimmed beyond the limit |
 | Multi-engine | Engine card in console: **Qwen integrated** (default) or **separated pipeline** (SiliconFlow SenseVoice ASR + 3 free translation engines: Qwen2.5 / Hunyuan-MT / GLM-4.7-Flash); one-click connection test, hot-switch while running |
+| Vocabulary notebook | Auto-captures new words at sentence end (smart noise filter: top-5000 frequency words skipped, 75% noise removed in real classroom test); frequency ranking = review priority; one-click Anki TSV export (word + source sentence + translation) |
 | History | SQLite per final sentence; double-click row to copy; one-click Excel (.xlsx, real datetime cells & styled) or CSV export (UTF-8-BOM) |
 | Window memory | Caption position & size restored across launches |
 | Latency badge | Optional per-sentence latency display (`Ctrl` toggle in console) |
