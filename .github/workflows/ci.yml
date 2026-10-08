@@ -20,7 +20,12 @@ jobs:
       - name: Run tests (offscreen, no audio devices needed)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest tests/ -q
+        run: pytest tests/ -v --tb=long 2>&1 | tee pytest_out.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Dump pytest output on failure
+        if: failure()
+        run: cat pytest_out.txt
+        shell: bash
         timeout-minutes: 10
 
   build:
