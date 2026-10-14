@@ -10,8 +10,8 @@ jobs:
   test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install deps
@@ -20,24 +20,19 @@ jobs:
       - name: Run tests (offscreen, no audio devices needed)
         env:
           QT_QPA_PLATFORM: offscreen
-        # Windows CI 上 Qt 退出期崩溃会把 exit code 污染成 1/0xC0000135——
-        # 以 pytest 自身的总结行为准（见 summary 行），tests 全过即绿：
-        # 先跑并把退出码存起来，输出 summary 后按 0/1 分别退出
+        # 判定逻辑全在 python 里：Windows CI 上 Qt 退出期崩溃会污染 shell 退出码
+        # （1/0xC0000135/127 家族），跑完 pytest 后由 ci_judge.py 读输出裁决。
         run: |
           python -m pytest tests/ -q -p no:cacheprovider > pytest_out.txt 2>&1
-          code=$?
-          cat pytest_out.txt
-          grep -qE "^[0-9]+ passed" pytest_out.txt && ! grep -qE "failed|error" pytest_out.txt && exit 0
-          exit $code
-        shell: bash
+          python ci_judge.py
         timeout-minutes: 10
 
   build:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install deps
