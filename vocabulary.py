@@ -49,24 +49,35 @@ def _load_freq_table() -> frozenset:
     """B 方案：内置通用词频表（google-10000-english 公开数据集前 N 词）。
 
     高频词=大概率已会 → 不收。档位由 settings.vocab_freq_cutoff 控制
-    （默认 5000；调低收更多，调高收更少；0=关闭 B 过滤）。懒加载一次。
+    （默认 5000；调低收更多，调高收更少；0=关闭 B 过滤）。
+    结果按档位缓存（R16-L2：避免每次重建 5000 词 frozenset）。
     """
-    global _FREQ_SET, _FREQ_LIST
+    global _FREQ_LIST, _FREQ_CACHE_CUTOFF, _FREQ_CACHE_SET
+    cutoff = _freq_cutoff()
+    if cutoff <= 0:
+        return frozenset()
     if _FREQ_LIST is None:
         try:
             path = Path(__file__).parent / "freq_words.txt"
             _FREQ_LIST = [w.strip() for w in
                           open(path, encoding="utf-8") if w.strip()]
-        except Exception:  # noqa: BLE001 — 词表缺失时退化为仅 A 方案
+        except Exception as e:  # noqa: BLE001
+            # R16-M1：词表缺失不再静默——一次性 stderr 警告（不弹窗不打断），
+            # B 层退化为仅 A 层过滤时用户至少能在控制台/日志里看到原因。
+            import sys as _sys
+            print(f"[vocab] WARNING: freq_words.txt load failed ({e!r}); "
+                  "noise filter layer-B disabled", file=_sys.stderr)
             _FREQ_LIST = []
-    cutoff = _freq_cutoff()
-    if cutoff <= 0:
-        return frozenset()
-    return frozenset(w for w in _FREQ_LIST[:cutoff] if len(w) >= 3)
+    if _FREQ_CACHE_CUTOFF != cutoff or _FREQ_CACHE_SET is None:
+        _FREQ_CACHE_SET = frozenset(
+            w for w in _FREQ_LIST[:cutoff] if len(w) >= 3)
+        _FREQ_CACHE_CUTOFF = cutoff
+    return _FREQ_CACHE_SET
 
 
 _FREQ_LIST: list[str] | None = None
-_FREQ_SET: frozenset | None = None
+_FREQ_CACHE_CUTOFF: int | None = None
+_FREQ_CACHE_SET: frozenset | None = None
 
 
 def _freq_cutoff() -> int:
@@ -170,11 +181,13 @@ class VocabStore:
         return [dict(zip(keys, r)) for r in rows]
 
     def search(self, q: str) -> list[dict]:
+        """子串搜索（LIKE 通配符按字面处理——R16-L1：ESCAPE 转义）。"""
+        esc = (q or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         with self._lock:
             rows = self._conn.execute(
                 "SELECT id,word,translation,context,source,first_ts,hits"
-                " FROM vocabulary WHERE word LIKE ? ORDER BY hits DESC",
-                (f"%{q}%",)).fetchall()
+                " FROM vocabulary WHERE word LIKE ? ESCAPE '\\' ORDER BY hits DESC",
+                (f"%{esc}%",)).fetchall()
         keys = ("id", "word", "translation", "context", "source",
                 "first_ts", "hits")
         return [dict(zip(keys, r)) for r in rows]
