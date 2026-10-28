@@ -14,7 +14,7 @@
 
 **深色 / 浅色主题：**
 
-| ![深色主题](assets/screenshot-dark.png) | ![浅色主题](assets/screenshot-light.png) |
+| ![深色主题](assets/screenshot-dark-v2.png) | ![浅色主题](assets/screenshot-light-v2.png) |
 |:---:|:---:|
 | 深色（默认） | 浅色 |
 

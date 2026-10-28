@@ -16,7 +16,7 @@ A real-time bilingual caption tool built on the **Qwen3.8-LiveTranslate-Flash-Re
 
 **Dark / Light themes:**
 
-| ![Dark theme](assets/screenshot-dark.png) | ![Light theme](assets/screenshot-light.png) |
+| ![Dark theme](assets/screenshot-dark-v2.png) | ![Light theme](assets/screenshot-light-v2.png) |
 |:---:|:---:|
 | Dark (default) | Light |
 
